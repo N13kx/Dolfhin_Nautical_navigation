@@ -1,6 +1,6 @@
-# [Project name]
+# Dolphin Navigation
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A maritime navigation PWA for inland waterway sailors — live GPS, SOG/COG readouts, and a full-screen map with Dolphin/Satellite/Hybrid modes.
 
 ## Run & Operate
 
@@ -22,7 +22,12 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- Frontend: `artifacts/dolphin/src/`
+- Map logic: `src/components/MapView.tsx` — MapLibre GL init with WebGL fallback
+- GPS hook: `src/hooks/useGeolocation.ts` — lifecycle-safe watchPosition wrapper
+- Main page: `src/pages/DolphinApp.tsx`
+- Theme: `src/index.css` — dark nautical palette, teal (#44e4c2) accent
+- PWA: `public/manifest.webmanifest`, `public/sw.js`
 
 ## Architecture decisions
 
@@ -30,7 +35,12 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Full-screen MapLibre GL map (OSM nautical, ESRI Satellite, Hybrid)
+- Live GPS tracking: SOG in knots, COG in degrees, accuracy in meters
+- Custom animated boat marker with heading rotation and pulsing ring
+- Glass-morphism overlay UI (top bar, search, status strip, locate FAB, layer sheet)
+- PWA-ready with service worker and web app manifest
+- Dutch language UI
 
 ## User preferences
 

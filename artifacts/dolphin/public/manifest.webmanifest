@@ -1,0 +1,9 @@
+{
+  "name": "Dolphin Navigation",
+  "short_name": "Dolphin",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071820",
+  "theme_color": "#071820",
+  "description": "Dolphin Alpha — slimme navigatie voor het water"
+}

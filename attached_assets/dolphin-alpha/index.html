@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#071820" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dolphin" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Dolphin Alpha</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="map"></div>
+
+      <header class="topbar glass">
+        <div class="brand">
+          <div class="logo">D</div>
+          <div>
+            <div class="brand-name">DOLPHIN</div>
+            <div class="alpha">ALPHA 0.1</div>
+          </div>
+        </div>
+        <button id="layersBtn" class="icon-btn" aria-label="Kaartlagen">◫</button>
+      </header>
+
+      <section class="search glass">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" placeholder="Waar wil je heen?" autocomplete="off" />
+      </section>
+
+      <section id="statusPanel" class="status glass">
+        <div>
+          <span class="label">SOG</span>
+          <strong id="sog">—</strong>
+          <small>kn</small>
+        </div>
+        <div>
+          <span class="label">COG</span>
+          <strong id="cog">—</strong>
+          <small>°</small>
+        </div>
+        <div>
+          <span class="label">GPS</span>
+          <strong id="accuracy">—</strong>
+          <small>m</small>
+        </div>
+      </section>
+
+      <button id="locateBtn" class="locate-btn glass" aria-label="Mijn positie">◎</button>
+
+      <div id="layerSheet" class="sheet hidden">
+        <div class="sheet-card">
+          <div class="sheet-handle"></div>
+          <h2>Kaartweergave</h2>
+          <button data-mode="dolphin" class="mode active">
+            <span>◉</span><div><strong>Dolphin</strong><small>Rustige navigatiekaart</small></div>
+          </button>
+          <button data-mode="satellite" class="mode">
+            <span>◍</span><div><strong>Satellite</strong><small>Lucht- en satellietbeeld</small></div>
+          </button>
+          <button data-mode="hybrid" class="mode">
+            <span>◎</span><div><strong>Hybrid</strong><small>Beeld + Dolphin overlays</small></div>
+          </button>
+          <button id="closeSheet" class="close-sheet">Gereed</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

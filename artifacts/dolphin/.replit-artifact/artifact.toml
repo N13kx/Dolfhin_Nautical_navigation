@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Dolphin Navigation"
+version = "1.0.0"
+id = "artifacts/dolphin"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19115
+
+[services.development]
+run = "pnpm --filter @workspace/dolphin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dolphin", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/dolphin/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19115"
+BASE_PATH = "/"
