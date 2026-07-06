@@ -1,0 +1,126 @@
+Dolphin v0.1.1 has a real runtime crash on iPhone Safari.
+
+Do not start v0.2 work.
+Do not disable the Vite HMR runtime error overlay.
+Fix the root cause first.
+
+Observed error on iPhone Safari:
+
+[plugin:runtime-error-plugin]
+null is not an object
+(evaluating 'n2[0]')
+
+The app UI renders behind the error overlay.
+At the time of the crash:
+- GPS permission is active
+- SOG shows 0.0
+- COG shows approximately 7 degrees
+- GPS quality shows GOOD
+- the app is running through the Replit development URL on iPhone Safari
+
+TASK:
+
+1. Reproduce and identify the ORIGINAL source location of the null indexing error.
+   - Use source maps and the full runtime stack trace.
+   - Do not treat "n2[0]" as the real source variable name.
+   - Find the original TypeScript/React source file and line.
+
+2. Search the codebase for unsafe indexing and destructuring patterns, especially:
+   - value[0]
+   - value[1]
+   - coordinates[0]
+   - coordinates[1]
+   - array destructuring from nullable values
+   - GeoJSON coordinate access
+   - search result indexing
+   - MapLibre feature arrays
+   - bearing/course arrays
+   - style/layer arrays
+
+3. Inspect all code introduced in v0.1.1, especially:
+   - course-up mode
+   - north-up mode
+   - follow-position mode
+   - geolocation refactor
+   - GPS quality logic
+   - overlayManager
+   - style restoration after map.setStyle()
+   - Hybrid mode
+   - search provider
+
+4. Add proper null safety.
+   Never index a value unless it is validated first.
+
+Examples:
+
+BAD:
+const lon = coordinates[0]
+
+GOOD:
+if (
+  !Array.isArray(coordinates) ||
+  coordinates.length < 2 ||
+  !Number.isFinite(coordinates[0]) ||
+  !Number.isFinite(coordinates[1])
+) {
+  return
+}
+
+5. GPS-specific requirements:
+   - coords.heading may be null
+   - coords.speed may be null
+   - heading must not be used blindly while stationary
+   - stale GPS data must not crash map rotation
+   - invalid COG must fall back gracefully
+   - do not derive course-up from missing coordinates
+
+6. MapLibre-specific requirements:
+   - do not access layers or sources before style.load/styledata readiness
+   - map.getSource(...) may be absent
+   - queryRenderedFeatures may return an empty array
+   - selected features may be absent
+   - style switching must not leave stale references
+   - overlay restoration must tolerate missing optional data
+   - do not index feature arrays without checking length
+
+7. React requirements:
+   - verify StrictMode does not initialize map state twice
+   - verify callbacks do not retain stale destroyed MapLibre instances
+   - verify cleanup does not set refs to null while async callbacks still use them
+
+8. Add a temporary diagnostic error boundary/logging layer that records:
+   - original error stack
+   - active map mode
+   - tracking mode
+   - GPS position presence
+   - heading value
+   - speed value
+   - map style loaded state
+   - overlay restoration state
+
+Do not log precise user coordinates.
+
+9. After fixing:
+   - run TypeScript checks
+   - run production build
+   - test with null heading
+   - test with null speed
+   - test while stationary
+   - test GPS denied
+   - test rapid Dolphin/Satellite/Hybrid switching
+   - test style switch while overlays are loading
+   - test repeated follow/free/course-up changes
+   - test empty search results
+
+10. Report:
+   - exact root cause
+   - original source file and line
+   - why it only surfaced at runtime
+   - exact fix
+   - regression tests added
+
+IMPORTANT:
+Do not hide the error overlay.
+Do not suppress exceptions.
+Do not use broad try/catch blocks as a substitute for fixing invalid state.
+Preserve the current Dolphin UI.

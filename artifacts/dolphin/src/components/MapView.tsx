@@ -22,21 +22,56 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
     const onUserInteractionRef = useRef(onUserInteraction);
     const [webglFailed, setWebglFailed] = useState(false);
 
-    // Keep refs current so stale closures inside map event handlers always read
-    // the latest mode and callback without triggering re-registration.
     useEffect(() => { modeRef.current = mode; }, [mode]);
     useEffect(() => { onUserInteractionRef.current = onUserInteraction; }, [onUserInteraction]);
 
     useImperativeHandle(ref, () => ({
       getMap: () => map.current,
+
       easeTo: (opts: MapCenterOptions) => {
         if (!map.current) return;
-        map.current.easeTo({
-          center: opts.center,
-          bearing: opts.bearing,
-          zoom: opts.zoom,
+
+        /**
+         * Build options without undefined keys.
+         *
+         * MapLibre 5.x treats { center: undefined } differently from {}.
+         * An explicit `center: undefined` can enter a null-conversion path
+         * inside LngLat.convert, producing "null is not an object (evaluating 'n[0]')".
+         *
+         * We also validate every numeric value with Number.isFinite so that NaN
+         * coordinates (e.g. from a sensor that returns NaN instead of null) never
+         * reach MapLibre's internal geometry pipeline.
+         */
+        const easeOptions: maplibregl.EaseToOptions = {
           duration: opts.duration ?? 800,
-        });
+        };
+
+        if (opts.center !== undefined) {
+          const [lng, lat] = opts.center;
+          if (Number.isFinite(lng) && Number.isFinite(lat)) {
+            easeOptions.center = [lng, lat];
+          } else {
+            console.warn('[MapView] easeTo: center contains non-finite coordinates, skipping', opts.center);
+          }
+        }
+
+        if (opts.bearing !== undefined) {
+          if (Number.isFinite(opts.bearing)) {
+            easeOptions.bearing = opts.bearing;
+          } else {
+            console.warn('[MapView] easeTo: bearing is non-finite, skipping', opts.bearing);
+          }
+        }
+
+        if (opts.zoom !== undefined) {
+          if (Number.isFinite(opts.zoom)) {
+            easeOptions.zoom = opts.zoom;
+          } else {
+            console.warn('[MapView] easeTo: zoom is non-finite, skipping', opts.zoom);
+          }
+        }
+
+        map.current.easeTo(easeOptions);
       },
     }));
 
@@ -80,14 +115,15 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         }
       });
 
-      // Initial overlays after first load
+      // Initial overlays after first style load
       initialMap.on('load', () => {
         applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
         onMapLoad?.();
       });
 
-      // Re-apply overlays after every style swap (setStyle() wipes all sources+layers)
+      // Re-apply overlays after every style swap (setStyle wipes all sources+layers)
       const handleStyleData = () => {
+        if (!map.current) return; // guard against post-cleanup styledata events
         applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
       };
       initialMap.on('styledata', handleStyleData);
@@ -103,8 +139,10 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         initialMap.off('styledata', handleStyleData);
         initialMap.off('dragstart', handleUserInteraction);
         initialMap.off('rotatestart', handleUserInteraction);
-        initialMap.remove();
+        // Null the ref BEFORE remove() so that any styledata events queued
+        // during removal don't attempt to apply overlays to a dead instance.
         map.current = null;
+        initialMap.remove();
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentional one-time init
 
