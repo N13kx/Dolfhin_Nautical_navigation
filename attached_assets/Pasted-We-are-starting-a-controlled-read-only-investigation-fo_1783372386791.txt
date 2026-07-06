@@ -1,0 +1,312 @@
+We are starting a controlled read-only investigation for Dolphin v0.2.1 Nautical Data.
+
+IMPORTANT:
+- Work only on feature/v0.2.1-nautical-data.
+- Do not merge to main.
+- Do not integrate chart data into the Dolphin UI yet.
+- Do not render these cells on the map yet.
+- Do not modify the source .000 files.
+- Do not fabricate nautical attributes.
+- Do not claim a date field means “updated” or “issued” until formally decoded.
+- Do not create a second competing nautical architecture.
+- Do not start routing.
+
+Two real official Dutch IENC/S-57 cells are available:
+
+- 1R76W8LI.000
+- 1R76W8RI.000
+
+Treat them as read-only source samples.
+
+==================================================
+PHASE 1 — AUDIT CURRENT DOLPHIN ARCHITECTURE
+==================================================
+
+Inspect the current codebase and report existing reusable components related to:
+
+- provenance
+- NauticalLayerRegistry
+- ENC/IENC types
+- EncGeoJsonProvider
+- depth types
+- nautical object types
+- NauticalObjectSheet
+- map source management
+- validation utilities
+- any placeholder Zeeland data
+
+Do not create replacements before checking what already exists.
+
+==================================================
+PHASE 2 — INSPECT AVAILABLE TOOLING
+==================================================
+
+Check the actual environment for:
+
+- gdalinfo
+- ogrinfo
+- ogr2ogr
+- GDAL version
+- available OGR drivers
+- explicit S-57 driver availability
+
+Run equivalent checks such as:
+
+gdalinfo --version
+ogrinfo --version
+ogr2ogr --version
+ogrinfo --formats
+
+Report exact outputs relevant to S-57 support.
+
+Do not assume S-57 support merely because GDAL exists.
+
+If GDAL/S-57 is unavailable:
+- report this clearly
+- do not install random unverified parsers
+- do not continue with lossy custom parsing
+
+==================================================
+PHASE 3 — FILE FORENSICS
+==================================================
+
+For both cells, collect:
+
+- exact filename
+- byte size
+- SHA-256 checksum
+- ISO/IEC 8211 readability
+- recognizable S-57 dataset records
+- DSID presence
+- DSSI presence
+- DSPM presence
+- standard edition metadata where formally decoded
+- warnings/errors
+
+Do not infer field meanings from string position alone.
+
+==================================================
+PHASE 4 — FORMAL DATASET METADATA EXTRACTION
+==================================================
+
+Using an actual S-57-capable reader where available, extract and compare:
+
+- dataset name
+- edition number
+- update number
+- issue date
+- update application date
+- standard edition
+- product specification
+- producer agency
+- intended usage where available
+- compilation scale where available
+- horizontal datum
+- vertical datum
+- sounding datum
+- coordinate multiplier
+- sounding multiplier
+
+For every field report:
+
+- decoded field name
+- raw value
+- interpreted value
+- confidence
+- absent/unknown state
+
+Never guess missing values.
+
+==================================================
+PHASE 5 — OBJECT CLASS INVENTORY
+==================================================
+
+For each cell independently, produce:
+
+Object class
+Feature count
+Geometry type(s)
+Attribute count
+Example record IDs
+
+Do not begin with a predefined assumption about which classes are present.
+
+Then produce a comparison:
+
+- classes in both cells
+- classes only in LI
+- classes only in RI
+- major count differences
+
+Preserve raw class names.
+
+==================================================
+PHASE 6 — ATTRIBUTE INVENTORY
+==================================================
+
+For each relevant object class:
+
+- list all present attributes
+- data type
+- observed value examples
+- null/missing rate
+- cardinality / number of distinct values where practical
+- any encoded enumerations
+- raw attribute names preserved
+
+Do not normalize yet.
+
+Do not discard unknown attributes.
+
+==================================================
+PHASE 7 — GEOMETRY INVENTORY
+==================================================
+
+For each cell determine:
+
+- overall bbox
+- point feature count
+- line feature count
+- polygon feature count
+- 2D geometries
+- 3D/sounding geometries if present
+- invalid geometry count
+- empty geometry count
+- NaN/Infinity checks
+- coordinate range sanity
+
+Do not reproject or simplify source data during this phase.
+
+==================================================
+PHASE 8 — TWO-CELL BOUNDARY ANALYSIS
+==================================================
+
+Because these are adjacent cells, investigate:
+
+- bbox relationship
+- overlap region
+- touching boundaries
+- duplicate-looking features near the shared edge
+- repeated source IDs
+- repeated geometries
+- line continuity across cells
+- polygon continuity across cells
+- possible seam artifacts
+- whether IDs appear cell-scoped or globally stable
+
+Do not automatically deduplicate.
+
+Produce candidate matching evidence only.
+
+==================================================
+PHASE 9 — UPDATE / EDITION ANALYSIS
+==================================================
+
+Inspect both files for evidence of:
+
+- base dataset status
+- edition number
+- update number
+- whether companion .001/.002 update files would be expected
+- whether these .000 cells appear to be complete replacement base cells
+
+Do not claim update policy from assumptions.
+
+Separate:
+
+A. what the actual files prove
+B. what external documentation says
+C. what remains unknown
+
+==================================================
+PHASE 10 — DOLPHIN INGESTION IMPLICATIONS
+==================================================
+
+Based only on verified findings, propose:
+
+Official .000 cell
+-> immutable raw archive
+-> checksum manifest
+-> S-57 reader
+-> metadata extraction
+-> object inventory
+-> selected normalization
+-> validation
+-> web output
+
+Recommend whether the current alpha should use:
+
+- GeoJSON per object class
+- GeoJSON per Dolphin feature group
+- another intermediate format
+
+Do not implement the final pipeline yet.
+
+==================================================
+PHASE 11 — SOURCE SAFETY
+==================================================
+
+Ensure:
+
+- .000 source files are never mutated
+- raw source files are not exposed via public web paths
+- raw files are not automatically bundled into production
+- large source files are not accidentally committed without explicit intent
+- checksums are recorded
+
+==================================================
+PHASE 12 — CURRENT APP MUST NOT CHANGE
+==================================================
+
+Do not regress or modify:
+
+- GPS
+- SOG/COG
+- themes
+- settings
+- vessel profile
+- persistence
+- map modes
+- Hybrid Community seamarks
+- PDOK provider architecture
+
+The user-visible application should behave exactly as before this research pass.
+
+==================================================
+VALIDATION
+==================================================
+
+Run:
+
+- TypeScript check
+- production build
+
+Confirm:
+- app behavior unchanged
+- no official IENC data rendered
+- no raw chart source exposed publicly
+- no fabricated metadata
+
+==================================================
+FINAL REPORT
+==================================================
+
+Return:
+
+1. Existing Dolphin nautical architecture found
+2. Tooling availability
+3. S-57 driver status
+4. File forensic summary
+5. Formal metadata comparison table
+6. Object class inventory per cell
+7. Object class comparison
+8. Attribute inventory summary
+9. Geometry inventory
+10. Cell boundary/overlap findings
+11. Update/edition findings
+12. Remaining unknowns
+13. Proposed ingestion architecture
+14. Exact next recommended action
+
+This is an investigation phase only.
+Do not integrate or render the cells yet.
