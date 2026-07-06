@@ -9,7 +9,11 @@ A maritime navigation PWA for inland waterway sailors — live GPS, SOG/COG read
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env (runtime-managed by Replit, no manual setup needed):
+  - `DATABASE_URL` — Postgres connection string
+  - `PORT` — port assigned to each artifact's dev server (injected per workflow)
+  - `BASE_PATH` — URL base path prefix for each artifact (injected per workflow)
+  - `PORT` and `BASE_PATH` are only required during `vite serve`/`preview`; `vite build` falls back to `base: '/'`
 
 ## Stack
 
