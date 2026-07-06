@@ -1,0 +1,93 @@
+Before proceeding, correct and clarify the investigation plan.
+
+1. SOURCE FILE IDENTITY IS BLOCKING
+
+The intended second pilot cell is expected to be:
+
+1R76W8RI.000
+
+However, the current plan references:
+
+1R7788RI_1783372678701.000
+
+Do not treat this as a mere filename discrepancy.
+
+These may be entirely different chart cells.
+
+Before any forensic comparison:
+- list all available .000 files in attached_assets
+- report exact filenames
+- report exact byte sizes
+- report SHA-256 checksums
+- do not choose the newest upload automatically
+- do not rename or substitute a cell
+- stop and flag ambiguity if both files exist
+
+The two-cell comparison must only proceed after exact source identity is established.
+
+2. KEEP PLAN MODE PURE
+
+Do not install GDAL during Plan mode.
+
+Separate:
+A. Plan-mode research and investigation design
+B. Later Agent-mode read-only forensic execution
+
+In Plan mode:
+- document required installation steps
+- document exact verification commands
+- do not modify the environment
+
+3. GEOMETRY BBOX
+
+Do not describe bbox as coming directly from DSPM.
+
+Plan to:
+- decode geometries using COMF correctly
+- derive bbox from actual decoded spatial geometry
+- cross-check with OGR-reported extents
+
+4. CELL COMPARABILITY
+
+Before seam analysis compare:
+- INTU
+- compilation scale
+- product specification
+- edition
+- profile
+- datum settings
+
+Do not assume two geographically close cells are equivalent-scale adjacent peers.
+
+5. FOID ANALYSIS
+
+Add explicit analysis for:
+- same FOID + same geometry
+- same FOID + different geometry
+- different FOID + same geometry
+- shared endpoints / continuation
+
+6. PORTRAYAL RISK
+
+Add a clear distinction:
+
+data semantics != chart portrayal
+
+Add risk:
+"Correctly decoded object rendered with incorrect nautical portrayal"
+
+Do not assume raw S-57 object class directly defines final Dolphin symbolization.
+
+7. FINDING STATUS MODEL
+
+Every important report finding should be labeled as one of:
+
+- VERIFIED_FROM_FILE
+- VERIFIED_FROM_OFFICIAL_DOCUMENTATION
+- INFERRED
+- UNKNOWN
+
+Do not mix inference with extracted facts.
+
+Return the revised investigation plan only.
+Do not modify files or environment.
