@@ -37,6 +37,9 @@ export function DolphinApp() {
    */
   const markerMapRef = useRef<maplibregl.Map | null>(null);
 
+  /** Counts how many distinct MapLibre instances have been initialised (for diagnostics) */
+  const mapInstanceCountRef = useRef(0);
+
   const [mapMode, setMapMode] = useState<MapMode>('Dolphin');
   const [trackingMode, setTrackingMode] = useState<TrackingMode>('follow');
   const [isLayerSheetOpen, setIsLayerSheetOpen] = useState(false);
@@ -55,6 +58,7 @@ export function DolphinApp() {
   useEffect(() => {
     updateDiagnostics({
       mapMode,
+      overlayMode: mapMode,          // mirrors mapMode (base layer / overlay selection)
       trackingMode,
       hasPosition: position !== null,
       headingFinite: isValidHeading(position?.heading ?? null),
@@ -116,6 +120,10 @@ export function DolphinApp() {
         boatMarkerRef.current = null;
       }
       markerMapRef.current = currentMap ?? null;
+      if (currentMap) {
+        mapInstanceCountRef.current += 1;
+        updateDiagnostics({ mapInstanceCount: mapInstanceCountRef.current });
+      }
     }
 
     if (currentMap) {

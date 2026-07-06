@@ -42,8 +42,9 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
          * coordinates (e.g. from a sensor that returns NaN instead of null) never
          * reach MapLibre's internal geometry pipeline.
          */
+        const rawDuration = opts.duration ?? 800;
         const easeOptions: maplibregl.EaseToOptions = {
-          duration: opts.duration ?? 800,
+          duration: Number.isFinite(rawDuration) ? rawDuration : 800,
         };
 
         if (opts.center !== undefined) {
