@@ -1,0 +1,1 @@
+- [Dolphin Architecture](dolphin-architecture.md) — module layout, Hybrid mode fix, tracking snap-back fix, GPS stale detection, search UX patterns.

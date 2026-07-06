@@ -1,63 +1,68 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { useGeolocation } from '../hooks/useGeolocation';
-import { MapView, type MapViewRef, type MapMode } from '../components/MapView';
+import { useGeolocation } from '../modules/navigation/useGeolocation';
+import { metersPerSecondToKnots } from '../modules/navigation/gpsUtils';
+import { createBoatMarkerElement, updateBoatHeading } from '../modules/vessel/boatMarker';
+import { MapView } from '../components/MapView';
 import { TopBar } from '../components/TopBar';
 import { SearchBar } from '../components/SearchBar';
 import { StatusStrip } from '../components/StatusStrip';
 import { LocateButton } from '../components/LocateButton';
 import { LayerSheet } from '../components/LayerSheet';
 import { Toast } from '../components/Toast';
-import { createBoatMarkerElement } from '../components/BoatMarker';
+import type { MapMode, MapViewRef, TrackingMode } from '../modules/map/types';
+import type { SearchResult } from '../services/search/types';
 
 export function DolphinApp() {
   const mapRef = useRef<MapViewRef>(null);
   const boatMarkerRef = useRef<maplibregl.Marker | null>(null);
-  
+
   const [mapMode, setMapMode] = useState<MapMode>('Dolphin');
+  const [trackingMode, setTrackingMode] = useState<TrackingMode>('follow');
   const [isLayerSheetOpen, setIsLayerSheetOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  
   const [hasInitialFix, setHasInitialFix] = useState(false);
-  const [sog, setSog] = useState<number | null>(null);
-  const [cog, setCog] = useState<number | null>(null);
-  const [gpsAcc, setGpsAcc] = useState<number | null>(null);
 
-  const { position, error, isTracking, start: startGps, stop: stopGps } = useGeolocation();
+  const { position, quality, error, isTracking, start: startGps, stop: stopGps } = useGeolocation();
 
-  // Start GPS on mount; stop on unmount (StrictMode-safe: hook guards duplicate starts)
+  // Ref mirrors trackingMode state so GPS-update effects always read the latest
+  // value without being stale between React render cycles (prevents snap-back
+  // when a position update and a drag fire in the same scheduler tick).
+  const trackingModeRef = useRef<TrackingMode>(trackingMode);
+  useEffect(() => { trackingModeRef.current = trackingMode; }, [trackingMode]);
+
+  // Start GPS on mount; stop on unmount (hook guards against duplicate starts)
   useEffect(() => {
     startGps();
     return () => stopGps();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — startGps/stopGps are stable callbacks
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle Error Toast
+  // GPS error messages
   useEffect(() => {
-    if (error) {
-      let msg = 'GPS fout opgetreden.';
-      if (error.code === error.PERMISSION_DENIED) msg = 'Geen toegang tot locatie. Controleer je instellingen.';
-      if (error.code === error.POSITION_UNAVAILABLE) msg = 'Locatie onbekend. Zoeken naar signaal...';
-      if (error.code === error.TIMEOUT) msg = 'Time-out bij zoeken naar locatie.';
-      setToastMsg(msg);
-    }
+    if (!error) return;
+    const messages: Record<string, string> = {
+      permission_denied: 'Geen toegang tot locatie. Controleer je instellingen.',
+      unavailable: 'Locatie onbekend. Zoeken naar signaal...',
+      timeout: 'Time-out bij zoeken naar locatie.',
+      unsupported: 'GPS wordt niet ondersteund door deze browser.',
+      unknown: 'GPS fout opgetreden.',
+    };
+    setToastMsg(messages[error.code] ?? messages.unknown);
   }, [error]);
 
-  // Handle GPS Updates
+  // GPS position updates → update marker + apply tracking
+  // Reads trackingModeRef.current (not state) to get the latest mode at execution
+  // time, preventing the snap-back race where a GPS update fires in the same
+  // React scheduler tick as a drag event that sets mode to 'free'.
   useEffect(() => {
-    if (position) {
-      const { latitude, longitude, speed, heading, accuracy } = position.coords;
-      
-      // Update status strip (speed is m/s -> knots)
-      const speedKnots = speed !== null ? speed * 1.94384 : null;
-      setSog(speedKnots);
-      setCog(heading);
-      setGpsAcc(accuracy);
+    if (!position) return;
 
-      const map = mapRef.current?.getMap();
-      if (!map) return;
+    const { latitude, longitude, heading } = position;
+    const map = mapRef.current?.getMap();
 
-      // Update Marker
+    // Create or update the boat marker
+    if (map) {
       if (!boatMarkerRef.current) {
         const el = createBoatMarkerElement();
         boatMarkerRef.current = new maplibregl.Marker({ element: el })
@@ -65,79 +70,136 @@ export function DolphinApp() {
           .addTo(map);
       } else {
         boatMarkerRef.current.setLngLat([longitude, latitude]);
-        
-        // Rotate marker if we have heading
         if (heading !== null) {
-          const el = boatMarkerRef.current.getElement();
-          const triangle = el.querySelector('div > div:nth-child(2)') as HTMLElement;
-          if (triangle) {
-            triangle.style.transform = `translateY(-1px) rotate(${heading}deg)`;
-          }
+          updateBoatHeading(boatMarkerRef.current.getElement(), heading);
         }
       }
-
-      // First fix: center map
-      if (!hasInitialFix) {
-        map.easeTo({
-          center: [longitude, latitude],
-          zoom: 15,
-          duration: 1200
-        });
-        setHasInitialFix(true);
-      }
     }
-  }, [position, hasInitialFix]);
 
-  const handleLocateClick = () => {
-    if (!isTracking) {
-      startGps();
-      setToastMsg("GPS gestart...");
+    // First fix: always center the map regardless of tracking mode
+    if (!hasInitialFix) {
+      mapRef.current?.easeTo({ center: [longitude, latitude], zoom: 15, duration: 1200 });
+      setHasInitialFix(true);
       return;
     }
 
-    if (position) {
-      const map = mapRef.current?.getMap();
-      if (map) {
-        map.easeTo({
-          center: [position.coords.longitude, position.coords.latitude],
-          zoom: 15,
-          duration: 800
-        });
-      }
-    } else {
-      setToastMsg("Wachten op GPS signaal...");
+    // Read ref for latest mode — avoids stale closure race with drag events
+    const currentMode = trackingModeRef.current;
+    if (currentMode === 'follow') {
+      mapRef.current?.easeTo({ center: [longitude, latitude], duration: 600 });
+    } else if (currentMode === 'courseUp') {
+      mapRef.current?.easeTo({
+        center: [longitude, latitude],
+        bearing: heading ?? 0,
+        duration: 600,
+      });
     }
-  };
+    // 'free': do nothing — let the user pan freely
+  }, [position, hasInitialFix]); // trackingMode intentionally omitted — read via ref
 
-  const handleSearchSubmit = () => {
-    setToastMsg("Zoeken koppelen we in Alpha 0.2 aan geocoding en vaarwegobjecten.");
-  };
+  // Map drag → exit tracking mode
+  const handleMapUserInteraction = useCallback(() => {
+    setTrackingMode('free');
+  }, []);
+
+  // Locate button cycles: free → follow → courseUp → free (north-up reset)
+  const handleLocateClick = useCallback(() => {
+    if (!isTracking) {
+      startGps();
+      setToastMsg('GPS gestart...');
+      return;
+    }
+
+    if (!position) {
+      setToastMsg('Wachten op GPS signaal...');
+      return;
+    }
+
+    const { longitude, latitude, heading } = position;
+
+    if (trackingMode === 'free') {
+      setTrackingMode('follow');
+      mapRef.current?.easeTo({ center: [longitude, latitude], zoom: 15, duration: 800 });
+      setToastMsg('Positie volgen');
+    } else if (trackingMode === 'follow') {
+      setTrackingMode('courseUp');
+      mapRef.current?.easeTo({
+        center: [longitude, latitude],
+        bearing: heading ?? 0,
+        zoom: 15,
+        duration: 800,
+      });
+      setToastMsg('Koers omhoog');
+    } else {
+      // courseUp → free + reset bearing to north
+      setTrackingMode('free');
+      mapRef.current?.easeTo({ bearing: 0, duration: 600 });
+      setToastMsg('Noord omhoog');
+    }
+  }, [isTracking, position, trackingMode, startGps]);
+
+  // Search result → fly to location, exit tracking
+  const handleSearchResult = useCallback((result: SearchResult) => {
+    setTrackingMode('free');
+    const map = mapRef.current?.getMap();
+
+    if (result.bbox && map) {
+      map.fitBounds(
+        [[result.bbox[0], result.bbox[1]], [result.bbox[2], result.bbox[3]]],
+        { padding: 60, duration: 1000, maxZoom: 15 }
+      );
+    } else {
+      mapRef.current?.easeTo({ center: result.center, zoom: 14, duration: 1000 });
+    }
+
+    setToastMsg(result.name);
+  }, []);
+
+  const sog = position?.speed != null ? metersPerSecondToKnots(position.speed) : null;
+  const cog = position?.heading ?? null;
 
   return (
     <div className="relative w-screen h-[100dvh] bg-[#071820] overflow-hidden">
-      <MapView ref={mapRef} mode={mapMode} />
+      <MapView
+        ref={mapRef}
+        mode={mapMode}
+        onUserInteraction={handleMapUserInteraction}
+      />
 
-      <TopBar 
+      <TopBar
         onLayersClick={() => setIsLayerSheetOpen(true)}
         onSearchFocus={() => setIsSearchFocused(true)}
       />
 
-      <SearchBar 
+      <SearchBar
         isFocusedExternally={isSearchFocused}
         onBlurExternally={() => setIsSearchFocused(false)}
-        onSearchSubmit={handleSearchSubmit}
+        onResultSelect={handleSearchResult}
       />
 
       <Toast message={toastMsg} onClose={() => setToastMsg(null)} />
 
-      <LocateButton onClick={handleLocateClick} isTracking={isTracking} />
+      <LocateButton
+        onClick={handleLocateClick}
+        trackingMode={trackingMode}
+        hasPosition={position !== null}
+      />
 
-      <StatusStrip sog={sog} cog={cog} gpsAcc={gpsAcc} />
+      <StatusStrip
+        sog={sog}
+        cog={cog}
+        gpsAcc={position?.accuracy ?? null}
+        gpsQuality={quality}
+        isStale={position?.isStale ?? false}
+      />
 
-      <LayerSheet 
+      <LayerSheet
         isOpen={isLayerSheetOpen}
         activeMode={mapMode}
-        onModeSelect={setMapMode}
+        onModeSelect={(mode) => {
+          setMapMode(mode);
+          setIsLayerSheetOpen(false);
+        }}
         onClose={() => setIsLayerSheetOpen(false)}
       />
     </div>
