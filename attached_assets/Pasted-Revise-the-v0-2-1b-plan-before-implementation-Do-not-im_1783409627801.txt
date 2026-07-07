@@ -1,0 +1,247 @@
+Revise the v0.2.1b plan before implementation.
+
+Do not implement yet.
+Do not modify code.
+Do not start Task #7 yet.
+
+The current plan is directionally approved, but the following issues must be resolved explicitly.
+
+==================================================
+1. FIX FEATURE-CLASS COUNT
+==================================================
+
+The plan says "seven confirmed classes" but lists:
+
+- BCNSPP
+- BOYLAT
+- BOYSPP
+- LIGHTS
+- TOPMAR
+- DEPARE
+- DEPCNT
+- SOUNDG
+
+That is 8 classes.
+
+Correct all scope descriptions and ensure the manifest, validation plan, and task wording use one exact consistent class set.
+
+==================================================
+2. AUDIT ACTUAL SOUNDG GDAL GEOMETRY
+==================================================
+
+This is a blocking requirement.
+
+The plan uses:
+
+- SPLIT_MULTIPOINT=NO
+- ADD_SOUNDG_DEPTH=NO
+
+but later assumes a simple per-feature Z value.
+
+Before planning normalization, inspect the actual GDAL output for SOUNDG in both pilot cells and report:
+
+- geometry type
+- whether SOUNDG is PointZ, MultiPointZ, or mixed
+- whether one source feature can contain multiple sounding coordinates
+- how Z is represented
+- whether Z exists per coordinate
+- whether a single feature can contain both positive and negative Z values
+- actual examples from both cells
+- actual positive/negative/zero distributions
+
+Do not assume:
+one SOUNDG feature = one Z value.
+
+If multipoint geometry is present, design signed semantics per sounding coordinate, not as one unsafe feature-level boolean.
+
+==================================================
+3. REVISE SOUNDING SEMANTIC MODEL
+==================================================
+
+Do not automatically use only:
+
+dryingFeature: boolean
+
+Prefer an explicit normalized relation-to-datum model such as:
+
+- chartedValueMetres
+- chartedValueRelationToDatum: "above" | "below" | "at"
+- depthDatum: "Approximate LAT"
+
+Use a user-facing "Drying height" label only when supported by the verified semantics.
+
+Never apply abs().
+
+Never convert an above-datum value into navigable depth.
+
+==================================================
+4. CORRECT "RAW-PRESERVING" TERMINOLOGY
+==================================================
+
+Do not claim ogr2ogr GeoJSON is the raw S-57 representation.
+
+Use this distinction:
+
+immutable raw source truth:
+- original .000 bytes
+- verified SHA-256
+
+decoded intermediate:
+- GDAL/S57-decoded geometry and attributes
+- reader version and options recorded
+
+normalized output:
+- Dolphin model
+
+Rename the conceptual stage to:
+
+"reader-preserving decoded intermediate"
+
+or equivalent.
+
+State explicitly that unknown GDAL-decoded attributes are preserved, but the intermediate is not claimed to preserve the original ISO/IEC 8211 record structure byte-for-byte.
+
+==================================================
+5. EXPLICIT CELL METADATA EXTRACTION
+==================================================
+
+Do not assume DSID_ISDT and DSID_UADT automatically exist on every feature.
+
+Plan a separate cell metadata extraction step.
+
+For each source cell, create decoded metadata containing where formally available:
+
+- sourceCellId
+- DSID dataset name
+- edition
+- update number
+- issue date
+- update application date
+- SDAT
+- VDAT
+- source checksum
+
+Then annotate normalized features from verified cell-level metadata.
+
+Never invent missing dates.
+
+==================================================
+6. LNAM MUST BE OPTIONAL
+==================================================
+
+Change:
+
+"every feature retains stable LNAM"
+
+to:
+
+"LNAM where available"
+
+Design:
+
+- sourceStableId = LNAM when formally available
+- otherwise null
+
+A separate deterministic pipelineFeatureId may be created for technical deduplication, but must never be represented as an official source identifier.
+
+Document the distinction.
+
+==================================================
+7. REPLACE ARBITRARY ±5 COUNT GATES
+==================================================
+
+Do not accept processed counts merely because they are within ±5 of REPORT.md baselines.
+
+For fixed source checksums and fixed reader conditions, prefer:
+
+- exact source-class count match
+
+If normalization intentionally changes cardinality, for example splitting MultiPoint soundings into one normalized feature per coordinate, record separately:
+
+- sourceFeatureCount
+- normalizedFeatureCount
+- transformationReason
+
+Any mismatch must be explicit and documented.
+
+==================================================
+8. BBOX GATE PROVENANCE
+==================================================
+
+Do not hardcode a bbox unless its origin is verified.
+
+Derive expected spatial bounds from:
+
+- verified source inventory
+or
+- actual validated extracted geometry
+
+Then apply only a documented tolerance.
+
+Report the provenance of the bbox gate.
+
+==================================================
+9. SAFE FRONTEND PUBLISHING
+==================================================
+
+Replace the vague:
+
+"Vite publicDir rule or symlink"
+
+with one explicit design.
+
+Preferred design:
+
+data/nautical/processed/
+→ controlled allowlist copy/publish step
+→ artifacts/dolphin/public/nautical/
+
+Only allow:
+
+- navigation-marks.geojson
+- depth-areas.geojson
+- depth-contours.geojson
+- soundings.geojson
+- pipeline-manifest.public.json
+
+Never expose raw/ or intermediate/.
+
+Do not use a broad directory symlink.
+
+==================================================
+10. SPLIT INTERNAL AND PUBLIC MANIFESTS
+==================================================
+
+Plan:
+
+pipeline-manifest.json
+- full internal audit record
+
+pipeline-manifest.public.json
+- minimum frontend-safe metadata only
+
+Explicitly define both schemas.
+
+==================================================
+11. REVISED FINAL OUTPUT
+==================================================
+
+Return:
+
+1. Corrected exact class scope
+2. Actual SOUNDG geometry findings
+3. Revised signed-sounding model
+4. Revised source/intermediate terminology
+5. Cell metadata extraction strategy
+6. Identifier strategy
+7. Exact count-validation strategy
+8. Bbox validation provenance
+9. Safe frontend publishing design
+10. Internal manifest schema
+11. Public manifest schema
+12. Revised Task #7
+13. Revised Task #8
+14. Remaining blockers
+15. Explicit GO / NO-GO recommendation for implementation
+
+Do not implement yet.
