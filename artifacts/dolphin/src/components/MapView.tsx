@@ -3,7 +3,12 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { MapMode, MapViewRef, MapCenterOptions } from '../modules/map/types';
 import { MAP_STYLES } from '../modules/map/styles';
-import { getOverlaysForMode, applyOverlays } from '../modules/map/overlayManager';
+import {
+  BASE_STYLE_GROUP,
+  getOverlaysForMode,
+  applyOverlays,
+  removeOverlays,
+} from '../modules/map/overlayManager';
 
 export type { MapMode, MapViewRef };
 
@@ -19,6 +24,7 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const modeRef = useRef<MapMode>(mode);
+    const prevModeRef = useRef<MapMode>(mode);
     const onUserInteractionRef = useRef(onUserInteraction);
     const [webglFailed, setWebglFailed] = useState(false);
 
@@ -122,16 +128,14 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         onMapLoad?.();
       });
 
-      // Re-apply overlays after every style swap (setStyle wipes all sources+layers).
+      // Re-apply overlays after a real base-style swap (setStyle with different base).
       //
-      // We listen to 'style.load' (not 'styledata') because when Satellite→Hybrid
-      // the two styles share an identical base (same esri source + layer). MapLibre's
-      // diff algorithm finds zero changes and may skip or short-circuit the styledata
-      // emission before addSource/addLayer are safe to call. 'style.load' fires exactly
-      // once per setStyle call, after the diff is committed and the style is fully
-      // initialised, making it safe to mutate sources and layers.
+      // This handler is ONLY reached when the base tile set changes (e.g. OSM → ESRI or
+      // ESRI → OSM). Same-base transitions (Satellite ↔ Hybrid) never call setStyle, so
+      // they never reach this handler — their overlays are reconciled directly in the
+      // mode-change effect below.
       const handleStyleLoad = () => {
-        if (!map.current) return; // guard against post-cleanup events
+        if (!map.current) return;
         applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
       };
       initialMap.on('style.load', handleStyleLoad);
@@ -147,18 +151,43 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         initialMap.off('style.load', handleStyleLoad);
         initialMap.off('dragstart', handleUserInteraction);
         initialMap.off('rotatestart', handleUserInteraction);
-        // Null the ref BEFORE remove() so that any styledata events queued
+        // Null the ref BEFORE remove() so that any in-flight events queued
         // during removal don't attempt to apply overlays to a dead instance.
         map.current = null;
         initialMap.remove();
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentional one-time init
 
-    // Mode changes swap the base style; overlays are restored by the styledata handler above
+    /**
+     * Mode transition — separates base-style lifecycle from overlay lifecycle.
+     *
+     * Base-style lifecycle (setStyle required):
+     *   Dolphin ↔ Satellite  OSM ↔ ESRI — full style reload
+     *   Dolphin ↔ Hybrid     OSM ↔ ESRI — full style reload
+     *   → setStyle fires style.load, which calls applyOverlays for the new mode.
+     *
+     * Overlay-only reconciliation (setStyle must NOT be called):
+     *   Satellite ↔ Hybrid   ESRI ↔ ESRI — identical base content
+     *   → setStyle produces a zero-diff; MapLibre emits no lifecycle events
+     *     (neither styledata nor style.load fires), so overlays are never applied.
+     *   → Instead: remove previous-mode overlays, add next-mode overlays directly.
+     */
     useEffect(() => {
-      if (map.current) {
-        map.current.setStyle(MAP_STYLES[mode]);
+      if (!map.current) return;
+      const m = map.current;
+      const prevMode = prevModeRef.current;
+      const nextMode = mode;
+
+      if (BASE_STYLE_GROUP[prevMode] !== BASE_STYLE_GROUP[nextMode]) {
+        // Base tiles change — swap style; handleStyleLoad applies the new overlays.
+        m.setStyle(MAP_STYLES[nextMode]);
+      } else {
+        // Same base tiles — reconcile overlays directly without touching the style.
+        removeOverlays(m, getOverlaysForMode(prevMode));
+        applyOverlays(m, getOverlaysForMode(nextMode));
       }
+
+      prevModeRef.current = nextMode;
     }, [mode]);
 
     if (webglFailed) {

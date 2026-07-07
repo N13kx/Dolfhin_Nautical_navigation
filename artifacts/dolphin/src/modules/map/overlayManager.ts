@@ -84,6 +84,22 @@ const OVERLAYS_BY_MODE: Record<MapMode, OverlaySpec[]> = {
   Hybrid: HYBRID_OVERLAYS,
 };
 
+/**
+ * Which base tile set each mode uses.
+ *
+ * Satellite and Hybrid share the same ESRI base, so switching between them
+ * must NOT call setStyle — MapLibre's diff algorithm produces a zero-diff and
+ * emits no lifecycle events, meaning style.load / styledata never fires and
+ * overlays are never applied. Instead, overlay reconciliation runs directly.
+ */
+export type BaseStyleGroup = 'osm' | 'esri';
+
+export const BASE_STYLE_GROUP: Record<MapMode, BaseStyleGroup> = {
+  Dolphin: 'osm',
+  Satellite: 'esri',
+  Hybrid: 'esri',
+};
+
 /** Returns the overlay specs for a given map mode. */
 export function getOverlaysForMode(mode: MapMode): OverlaySpec[] {
   return OVERLAYS_BY_MODE[mode];
@@ -91,7 +107,7 @@ export function getOverlaysForMode(mode: MapMode): OverlaySpec[] {
 
 /**
  * Applies overlays to the map. Safe to call multiple times — idempotent.
- * Called once on initial load and again after every style swap (styledata event).
+ * Called once on initial load and again after every real style swap.
  */
 export function applyOverlays(map: Map, overlays: OverlaySpec[]): void {
   for (const overlay of overlays) {
@@ -103,7 +119,27 @@ export function applyOverlays(map: Map, overlays: OverlaySpec[]): void {
         map.addLayer(overlay.layer);
       }
     } catch {
-      // Style may still be loading — the next styledata event will retry
+      // Style may still be initialising — handled by caller
     }
+  }
+}
+
+/**
+ * Removes overlays from the map. Safe to call if sources/layers are absent.
+ * Layers are removed before their sources (MapLibre requirement).
+ * Overlays are processed in reverse order to respect potential dependencies.
+ */
+export function removeOverlays(map: Map, overlays: OverlaySpec[]): void {
+  for (const overlay of [...overlays].reverse()) {
+    try {
+      if (map.getLayer(overlay.layerId)) {
+        map.removeLayer(overlay.layerId);
+      }
+    } catch { /* ignore */ }
+    try {
+      if (map.getSource(overlay.sourceId)) {
+        map.removeSource(overlay.sourceId);
+      }
+    } catch { /* ignore */ }
   }
 }
