@@ -1,9 +1,35 @@
 /**
- * Vessel module — identity, dimensions, and live kinematic state.
- *
- * VesselState is populated from GPS in Alpha 0.1.x.
- * Future versions can merge AIS data from the community module.
+ * Vessel module — vessel profile, identity, and live kinematic state.
  */
+
+// ---------------------------------------------------------------------------
+// Vessel Profile — the user's own vessel configuration (persisted locally)
+// ---------------------------------------------------------------------------
+
+export type VesselKind = 'sail' | 'motor' | 'rib' | 'barge' | 'other';
+
+export interface VesselProfile {
+  /** Unique identifier generated on first save */
+  id: string;
+  name: string;
+  kind: VesselKind;
+  lengthMeters?: number;
+  beamMeters?: number;
+  /** Static draught, meters */
+  draftMeters?: number;
+  /** Air draft — maximum height above waterline, meters */
+  airDraftMeters?: number;
+  /** Normal cruising speed, knots */
+  cruisingSpeedKnots?: number;
+  /** Maximum speed, knots (optional) */
+  maxSpeedKnots?: number;
+  /** Home port name (optional) */
+  homePort?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy AIS / community vessel types (retained for future AIS integration)
+// ---------------------------------------------------------------------------
 
 export type VesselType =
   | 'sailing'

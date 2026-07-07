@@ -10,7 +10,9 @@ import { StatusStrip } from '../components/StatusStrip';
 import { LocateButton } from '../components/LocateButton';
 import { LayerSheet } from '../components/LayerSheet';
 import { Toast } from '../components/Toast';
+import { SettingsScreen } from '../components/settings/SettingsScreen';
 import { updateDiagnostics } from '../diagnostics';
+import { useSettings } from '../modules/settings/SettingsContext';
 import type { MapMode, MapViewRef, TrackingMode } from '../modules/map/types';
 import type { SearchResult } from '../services/search/types';
 
@@ -25,6 +27,7 @@ function isValidSpeed(s: number | null): s is number {
 }
 
 export function DolphinApp() {
+  const { settings } = useSettings();
   const mapRef = useRef<MapViewRef>(null);
   const boatMarkerRef = useRef<maplibregl.Marker | null>(null);
 
@@ -40,10 +43,11 @@ export function DolphinApp() {
   /** Counts how many distinct MapLibre instances have been initialised (for diagnostics) */
   const mapInstanceCountRef = useRef(0);
 
-  const [mapMode, setMapMode] = useState<MapMode>('Dolphin');
+  const [mapMode, setMapMode] = useState<MapMode>(settings.defaultMapMode);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>('follow');
   const [isLayerSheetOpen, setIsLayerSheetOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [hasInitialFix, setHasInitialFix] = useState(false);
 
@@ -252,6 +256,7 @@ export function DolphinApp() {
       <TopBar
         onLayersClick={() => setIsLayerSheetOpen(true)}
         onSearchFocus={() => setIsSearchFocused(true)}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
       <SearchBar
@@ -285,6 +290,10 @@ export function DolphinApp() {
         }}
         onClose={() => setIsLayerSheetOpen(false)}
       />
+
+      {isSettingsOpen && (
+        <SettingsScreen onClose={() => setIsSettingsOpen(false)} />
+      )}
     </div>
   );
 }

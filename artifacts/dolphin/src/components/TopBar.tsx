@@ -1,11 +1,12 @@
-import { Search, Layers } from 'lucide-react';
+import { Search, Layers, Settings } from 'lucide-react';
 
 interface TopBarProps {
   onLayersClick: () => void;
   onSearchFocus: () => void;
+  onSettingsClick: () => void;
 }
 
-export function TopBar({ onLayersClick, onSearchFocus }: TopBarProps) {
+export function TopBar({ onLayersClick, onSearchFocus, onSettingsClick }: TopBarProps) {
   return (
     <div className="fixed top-[env(safe-area-inset-top,12px)] left-[12px] right-[12px] h-[62px] z-40">
       <div className="glass-panel w-full h-full rounded-[20px] flex items-center justify-between px-3">
@@ -18,13 +19,13 @@ export function TopBar({ onLayersClick, onSearchFocus }: TopBarProps) {
           <div className="flex flex-col justify-center">
             <span className="text-foreground font-bold tracking-widest text-[15px] leading-tight">DOLPHIN</span>
             <span className="text-primary font-medium text-[10px] tracking-wider uppercase leading-none mt-[2px]">
-              Alpha 0.1.1
+              Alpha 0.2
             </span>
           </div>
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onSearchFocus}
             className="w-[42px] h-[42px] rounded-[14px] glass-button flex items-center justify-center text-foreground hover:text-primary transition-colors"
@@ -40,6 +41,14 @@ export function TopBar({ onLayersClick, onSearchFocus }: TopBarProps) {
             aria-label="Kaartlagen"
           >
             <Layers size={20} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={onSettingsClick}
+            className="w-[42px] h-[42px] rounded-[14px] glass-button flex items-center justify-center text-foreground hover:text-primary transition-colors"
+            data-testid="button-settings"
+            aria-label="Instellingen"
+          >
+            <Settings size={20} strokeWidth={2} />
           </button>
         </div>
 
