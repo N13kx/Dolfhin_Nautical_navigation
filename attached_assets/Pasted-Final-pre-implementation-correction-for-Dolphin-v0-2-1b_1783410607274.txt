@@ -1,0 +1,201 @@
+Final pre-implementation correction for Dolphin v0.2.1b.
+
+MODE:
+PLAN REVISION ONLY.
+
+Do not implement yet.
+Do not start Task #7 yet.
+
+The revised plan is nearly approved. Apply the following final corrections.
+
+==================================================
+1. FIX BBOX VALIDATION — BLOCKING
+==================================================
+
+Do not validate all selected feature classes against a bbox derived only from the SOUNDG layer extent.
+
+Instead:
+
+- derive a verified bbox per source cell from the union of actual extracted geometry across all 8 selected classes:
+  BCNSPP, BOYLAT, BOYSPP, LIGHTS, TOPMAR, DEPARE, DEPCNT, SOUNDG
+
+For each cell:
+- calculate union extent after successful canonical extraction
+- record exact bbox in the internal manifest
+- record provenance:
+  "derived from union of GDAL-decoded selected-class geometry under pinned reader conditions"
+- apply only a documented small tolerance
+
+Validation must check each feature against the bbox belonging to its sourceCellId.
+
+Do not use SOUNDG-only extent as a universal gate.
+
+==================================================
+2. REMOVE DANGEROUS NAP BOOLEAN — BLOCKING
+==================================================
+
+Remove:
+
+verticalDatumNapInferred: true
+
+from normalized feature schemas.
+
+Use:
+
+verticalDatum: "Local Datum"
+verticalDatumCode: 24
+napIdentityStatus: "UNVERIFIED"
+
+Do not represent NAP identity as a positive boolean.
+
+The historical inference may remain documented in the internal audit manifest and investigation reports, but must never be promoted to verified feature metadata.
+
+==================================================
+3. PUBLIC MANIFEST VALIDATION STATUS
+==================================================
+
+Task #8 requires the public manifest to confirm a clean validation run, but the current public schema has no validation field.
+
+Add:
+
+validation: {
+  status: "PASS",
+  validatedAt: "ISO-8601 timestamp"
+}
+
+Also add:
+
+pipelineSchemaVersion: 1
+
+Task #8 must abort unless validation.status === "PASS".
+
+==================================================
+4. DEFINE DATE METADATA LOOKUP
+==================================================
+
+Do not leave issue/update date sourcing ambiguous.
+
+Preferred design:
+
+- normalized feature stores sourceCellId
+- pipeline-manifest.public.json stores per-cell:
+  issueDate
+  updateApplicationDate
+- frontend object sheet resolves dates by sourceCellId lookup
+
+Do not duplicate cell-level dates on every feature unless there is a documented reason.
+
+Never invent missing dates.
+
+==================================================
+5. AUDIT RAW FILE GIT TRACKING
+==================================================
+
+The real raw .000 files are in attached_assets/, not data/nautical/raw/.
+
+Before implementation:
+
+- inspect whether both .000 files are currently Git-tracked
+- report exact result
+
+If untracked:
+- add explicit .gitignore protection for the exact raw .000 files or attached_assets/*.000
+
+If already tracked:
+- do not silently remove them
+- report this as a source-governance issue before proceeding
+
+Raw files must never enter artifacts/dolphin/public/.
+
+==================================================
+6. READER VERSION MISMATCH
+==================================================
+
+Remove automatic fallback installation:
+
+nix-env -iA nixpkgs.gdal
+
+The investigated reader condition is GDAL 3.2.2.
+
+If exact required reader conditions are absent or differ:
+- abort
+- report environment mismatch
+- do not silently install a different GDAL version
+
+==================================================
+7. INVALID NUMERIC SOUNDINGS
+==================================================
+
+For this deterministic two-cell pilot:
+
+NaN or Infinity Z
+→ hard pipeline failure
+
+Do not silently skip the coordinate.
+
+Exact normalized SOUNDG count must remain 2084.
+
+==================================================
+8. GEOJSON GEOMETRY TERMINOLOGY
+==================================================
+
+Do not describe final GeoJSON geometry as "Curve".
+
+Record and validate actual emitted GeoJSON geometry types.
+
+Report any geometry coercion or linearization performed by GDAL or normalization.
+
+==================================================
+9. SAFE PUBLISH REPLACEMENT
+==================================================
+
+publish.sh must prevent stale public files.
+
+Preferred:
+
+- create temporary publish directory
+- copy exactly the 5 allowlisted files
+- verify exactly 5 expected files exist and are non-empty
+- replace artifacts/dolphin/public/nautical/ only after successful verification
+
+No symlinks.
+Never copy raw or intermediate files.
+
+==================================================
+10. TOPMAR RENDERING CAUTION
+==================================================
+
+Task #7 may ingest and normalize TOPMAR.
+
+Task #8 must not assume TOPMAR is always an independent standalone chart object.
+
+Before rendering TOPMAR independently:
+- inspect its actual geometry
+- inspect available relationship/reference fields
+- report whether standalone portrayal could duplicate or detach it from its parent buoy/beacon
+
+If association semantics remain unresolved:
+- keep TOPMAR in validated processed data
+- do not render it independently yet
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+Return only:
+
+1. Revised Task #7
+2. Revised Task #8
+3. Exact per-cell bbox strategy
+4. Revised datum metadata schema
+5. Public manifest schema
+6. Date lookup strategy
+7. Raw-file Git tracking result
+8. Exact reader mismatch behavior
+9. Invalid numeric behavior
+10. Publish atomicity design
+11. TOPMAR rendering decision rule
+12. Remaining blockers
+13. Final explicit GO / NO-GO recommendation
+
+Do not implement yet.
