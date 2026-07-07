@@ -1,0 +1,104 @@
+Final execution patch for Dolphin v0.2.1b Task #7.
+
+MODE:
+PATCH PLAN ONLY.
+
+Do not perform another broad redesign.
+
+The pipeline is approved except for one execution-chain blocker and two terminology inconsistencies.
+
+==================================================
+1. ADD EXPLICIT MANIFEST WRITE STEP — BLOCKING
+==================================================
+
+The documented sequencing says:
+
+normalize
+→ validate
+→ write manifests
+→ publish
+
+but the current end-to-end command chain says:
+
+verify
+→ extract-metadata
+→ extract-raw
+→ normalize
+→ validate
+→ publish
+
+This is inconsistent because publish requires:
+
+pipeline-manifest.public.json
+
+and that manifest must only be created after successful validation.
+
+Add an explicit script:
+
+scripts/nautical/write-manifests.sh
+
+Exact pipeline order:
+
+1. verify-checksums.sh
+2. extract-metadata.sh
+3. extract-raw.sh
+4. normalize.sh
+5. validate.sh
+6. write-manifests.sh
+7. publish.sh
+
+Requirements for write-manifests.sh:
+
+- abort unless the immediately preceding/current pipeline outputs have passed validation
+- write pipeline-manifest.json
+- write pipeline-manifest.public.json
+- public validation.status must be "PASS"
+- set validatedAt only at this stage
+- never write PASS manifests after failed validation
+- publish.sh must abort if the public manifest is absent
+
+Prefer recording a pipelineRunId so validation and manifests can be tied to the same generated output set.
+
+==================================================
+2. TERMINOLOGY CONSISTENCY
+==================================================
+
+Replace remaining wording:
+
+"atomic publish"
+"atomic temp-dir replace"
+
+with:
+
+"validated staged publish with rollback"
+
+Do not overclaim full filesystem atomicity.
+
+==================================================
+3. INTERNAL MANIFEST RESULT
+==================================================
+
+Because manifests are written only after successful validation, generated internal manifest must contain:
+
+validationResult: "PASS"
+
+Do not use the ambiguous generated value:
+
+"PASS | FAIL"
+
+Failed runs do not receive a PASS manifest.
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+Return only:
+
+1. Exact final pipeline command chain
+2. write-manifests.sh contract
+3. pipelineRunId decision
+4. corrected publish terminology
+5. corrected internal validationResult
+6. final GO / NO-GO
+
+After this patch, do not perform another planning round unless a new blocker is discovered.
