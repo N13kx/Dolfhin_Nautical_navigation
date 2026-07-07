@@ -1,0 +1,725 @@
+Implement Task #7 now.
+
+MODE:
+IMPLEMENTATION.
+
+Work only on the current branch:
+
+feature/v0.2.1b-official-ienc-integration
+
+Do not merge to main.
+Do not start Task #8.
+Do not modify frontend application behavior.
+Do not add MapLibre IENC rendering yet.
+Do not alter GPS, Settings, vessel profile, search, PDOK, themes, units, or map-mode lifecycle.
+
+Use the final approved Task #7 plan exactly as the implementation contract.
+
+==================================================
+EXECUTION PRIORITY
+==================================================
+
+Implement the full IENC data pipeline for the two canonical pilot cells:
+
+- 1R76W8LI
+- 1R7788RI
+
+Exact pipeline chain:
+
+1. verify-checksums.sh
+2. extract-metadata.sh
+3. extract-raw.sh
+4. normalize.sh
+5. validate.sh
+6. write-manifests.sh
+7. publish.sh
+
+Do not skip stages.
+Do not silently weaken validation.
+Do not substitute reader versions.
+Do not fabricate missing metadata.
+
+==================================================
+1. PRE-FLIGHT BRANCH AND ENVIRONMENT
+==================================================
+
+Before changing files:
+
+Report:
+
+- current branch
+- current HEAD
+- git status
+- exact GDAL version
+- S57 driver presence
+- existence of both raw .000 files
+- SHA-256 of both raw files
+
+Required branch:
+
+feature/v0.2.1b-official-ienc-integration
+
+Required GDAL:
+
+3.2.2 exact
+
+If branch differs:
+ABORT.
+
+If GDAL version differs:
+ABORT.
+
+If S57 driver is absent:
+ABORT.
+
+If either raw source file is absent:
+ABORT.
+
+If checksum differs:
+ABORT.
+
+Canonical source files:
+
+attached_assets/1R76W8LI_1783372678701.000
+SHA-256:
+1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea
+
+attached_assets/1R7788RI_1783372678701.000
+SHA-256:
+cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b
+
+==================================================
+2. GIT TRACKING REMEDIATION
+==================================================
+
+The two .000 files are currently Git-tracked.
+
+First perform dry-run only:
+
+git rm --cached --dry-run -- \
+  attached_assets/1R76W8LI_1783372678701.000 \
+  attached_assets/1R7788RI_1783372678701.000
+
+Inspect output.
+
+Proceed only if exactly those two intended paths are affected.
+
+Then execute:
+
+git rm --cached -- \
+  attached_assets/1R76W8LI_1783372678701.000 \
+  attached_assets/1R7788RI_1783372678701.000
+
+Requirements:
+
+- local files must remain physically present
+- immediately verify both local files still exist
+- do not rewrite history
+- do not rebase
+- do not delete source files from disk
+
+Add:
+
+attached_assets/*.000
+
+to .gitignore.
+
+Also ignore:
+
+data/nautical/raw/
+data/nautical/intermediate/
+
+Document fresh-clone source provisioning.
+
+==================================================
+3. DIRECTORY STRUCTURE
+==================================================
+
+Create:
+
+data/nautical/raw/
+data/nautical/intermediate/
+data/nautical/processed/
+
+scripts/nautical/
+
+Document in:
+
+data/nautical/README.md
+
+Include:
+
+- immutable raw source truth
+- checksum requirements
+- fresh-clone provisioning
+- exact reader requirements
+- intermediate-stage meaning
+- normalization rules
+- validation rules
+- manifest sequencing
+- publish procedure
+- stated limitations
+
+==================================================
+4. CHECKSUM GATE
+==================================================
+
+Implement:
+
+scripts/nautical/verify-checksums.sh
+
+Requirements:
+
+- no arguments
+- verify both exact source paths
+- fail if absent
+- calculate SHA-256
+- compare exact canonical hashes
+- exit non-zero on mismatch
+- clear diagnostic output
+- never modify sources
+
+==================================================
+5. CELL METADATA EXTRACTION
+==================================================
+
+Implement:
+
+scripts/nautical/extract-metadata.sh
+
+Requirements:
+
+- calls verify-checksums.sh first
+- GDAL 3.2.2 exact
+- extract dataset-level metadata where formally available
+
+Per cell output:
+
+data/nautical/intermediate/<cellId>/metadata.json
+
+Fields:
+
+- sourceCellId
+- sourceChecksum
+- DSID_DSNM
+- DSID_EDTN
+- DSID_UPDN
+- DSID_ISDT
+- DSID_UADT
+- DSID_AGEN
+- DSID_PRED
+- DSPM_VDAT
+- DSPM_SDAT
+- DSPM_HDAT
+
+Missing fields:
+
+null
+
+Never invent values.
+
+==================================================
+6. RAW EXTRACTION
+==================================================
+
+Implement:
+
+scripts/nautical/extract-raw.sh
+
+Requirements:
+
+- gates on verify-checksums.sh
+- gates on extract-metadata.sh
+- exact GDAL 3.2.2
+- no fallback
+- exact S57 reader conditions:
+
+SPLIT_MULTIPOINT=NO
+ADD_SOUNDG_DEPTH=NO
+LNAM_REFS=YES
+UPDATES=APPLY
+
+Process exactly 8 classes:
+
+- BCNSPP
+- BOYLAT
+- BOYSPP
+- LIGHTS
+- TOPMAR
+- DEPARE
+- DEPCNT
+- SOUNDG
+
+Output:
+
+data/nautical/intermediate/<cellId>/<CLASS>.geojson
+
+Requirements:
+
+- preserve all GDAL-decoded attributes
+- preserve geometry
+- add sourceCellId
+- add sourceChecksum
+- add rawObjectClass
+- sourceStableId = LNAM string where present
+- sourceStableId = null where absent
+- no other classes
+- unexpected geometry type = hard failure
+
+==================================================
+7. NORMALIZATION
+==================================================
+
+Implement:
+
+scripts/nautical/normalize.sh
+
+At start:
+
+delete any existing:
+
+- pipeline-manifest.json
+- pipeline-manifest.public.json
+
+from data/nautical/processed/
+
+Do not write manifests here.
+
+Produce exactly four outputs:
+
+1. navigation-marks.geojson
+2. depth-areas.geojson
+3. depth-contours.geojson
+4. soundings.geojson
+
+--------------------------------
+Navigation marks
+--------------------------------
+
+Classes:
+
+- BCNSPP
+- BOYLAT
+- BOYSPP
+- LIGHTS
+- TOPMAR
+
+Mapping:
+
+BCNSPP → beacon-special
+BOYLAT → buoy-lateral
+BOYSPP → buoy-special
+LIGHTS → light
+TOPMAR → topmark
+
+Every feature:
+
+- dolphinKind
+- sourceProperties
+- sourceKind: "official"
+- official: true
+- sourceCellId
+- sourceStableId
+- pipelineFeatureId
+- provenance
+
+TOPMAR additionally:
+
+associationRefsVerifiedInGdalOutput: false
+
+Do not invent portrayal semantics.
+
+--------------------------------
+Depth areas
+--------------------------------
+
+DEPARE fields:
+
+- DRVAL1
+- DRVAL2
+
+Add:
+
+depthDatum: "Approximate LAT"
+depthDatumCode: 42
+depthDatumStatus: "VERIFIED_FROM_OFFICIAL_DOCUMENTATION"
+verticalDatum: "Local Datum"
+verticalDatumCode: 24
+napIdentityStatus: "UNVERIFIED"
+
+Never apply abs().
+
+--------------------------------
+Depth contours
+--------------------------------
+
+DEPCNT:
+
+- VALDCO
+
+Same datum schema.
+
+Never apply abs().
+
+--------------------------------
+Soundings
+--------------------------------
+
+Input:
+
+3D MultiPoint SOUNDG
+
+Output:
+
+one normalized Point feature per coordinate
+
+Expected:
+
+2084 Point features exact
+
+For each coordinate:
+
+- preserve Z sign
+- chartedValueMetres = raw Z
+- chartedValueRelationToDatum:
+  - "above" if Z > 0
+  - "below" if Z < 0
+  - "at" if Z == 0
+- depthDatum
+- depthDatumCode
+- depthDatumStatus
+- verticalDatum
+- verticalDatumCode
+- napIdentityStatus
+- sourceFeatureLnam
+- sourceCellId
+- sourceChecksum
+- pipelineFeatureId
+- provenance
+
+NaN or Infinity Z:
+
+HARD FAILURE.
+
+Do not skip.
+Do not apply abs().
+
+==================================================
+8. PIPELINE FEATURE ID
+==================================================
+
+Use exact deterministic algorithm.
+
+Normal feature:
+
+<cellId>/<CLASS>/<RCID>
+
+Example:
+
+1R76W8LI/DEPARE/470104657
+
+Expanded SOUNDG coordinate:
+
+<cellId>/SOUNDG/<RCID>/<coordIndex>
+
+coordIndex:
+
+0-based original coordinate order in source MultiPoint
+
+Fallback if RCID absent or zero:
+
+<cellId>/<CLASS>/FIDN<FIDN>-FIDS<FIDS>
+
+If both RCID and usable FIDN/FIDS are unavailable:
+
+HARD FAILURE.
+
+pipelineFeatureId:
+
+- always JSON string
+- globally unique
+- technical only
+- never UI-facing
+- never claimed as official source ID
+
+==================================================
+9. VALIDATION
+==================================================
+
+Implement:
+
+scripts/nautical/validate.sh
+
+Exact per-cell counts:
+
+1R76W8LI:
+BCNSPP 2
+BOYLAT 0
+BOYSPP 0
+LIGHTS 25
+TOPMAR 1
+DEPARE 532
+DEPCNT 528
+SOUNDG source features 4
+SOUNDG coordinates 757
+
+1R7788RI:
+BCNSPP 0
+BOYLAT 12
+BOYSPP 5
+LIGHTS 13
+TOPMAR 14
+DEPARE 393
+DEPCNT 390
+SOUNDG source features 5
+SOUNDG coordinates 1327
+
+Combined normalized SOUNDG:
+
+2084 exact
+
+Validation gates:
+
+- exact counts
+- no empty geometries
+- no NaN
+- no Infinity
+- geometry types exact
+- sourceCellId present
+- provenance present
+- pipelineFeatureId present
+- pipelineFeatureId globally unique
+- sourceStableId/LNAM strings when non-null
+- no duplicate LNAM within same cell where LNAM exists
+- depthDatum present on all depth features
+- chartedValueRelationToDatum present on all soundings
+- napIdentityStatus exactly "UNVERIFIED"
+- verticalDatumNapInferred absent everywhere
+- per-cell bbox gate
+- JSON parse succeeds
+- JSON write/read round-trip succeeds
+- no identifier unsafe-number coercion
+- RCID within safe integer range
+- sourceProperties JSON-safe
+- unexpected geometry type fails
+
+Per-cell bbox:
+
+1R76W8LI:
+minLon 4.133333
+minLat 51.575000
+maxLon 4.333333
+maxLat 51.625000
+
+1R7788RI:
+minLon 4.333333
+minLat 51.625000
+maxLon 4.533333
+maxLat 51.675000
+
+Tolerance:
+
+±0.005°
+
+Validate each feature against its own sourceCellId bbox.
+
+Any failure:
+
+exit non-zero.
+
+==================================================
+10. MANIFEST WRITING
+==================================================
+
+Implement:
+
+scripts/nautical/write-manifests.sh
+
+Contract:
+
+- re-run validate.sh
+- abort on non-zero
+- generate pipelineRunId at script start:
+  ISO-8601 UTC timestamp + 8-char random hex suffix
+- write both manifests with same pipelineRunId
+- write only after successful validation
+
+Internal:
+
+data/nautical/processed/pipeline-manifest.json
+
+Must include:
+
+- pipelineRunId
+- validationResult: "PASS"
+- GDAL version
+- S57 driver presence
+- exact reader options
+- source checksums
+- source metadata
+- exact counts
+- geometry types
+- bbox provenance
+- datum labels
+- TOPMAR caveat
+- source governance note
+- limitations
+
+Public:
+
+data/nautical/processed/pipeline-manifest.public.json
+
+Must include:
+
+- pipelineSchemaVersion: 1
+- pipelineRunId
+- generatedAt
+- validation.status: "PASS"
+- validation.validatedAt
+- per-cell issue/update metadata
+- producer
+- depthDatum
+- depthDatumStatus
+- disclaimers
+
+Write failure:
+
+- delete both manifest files
+- exit non-zero
+
+Never leave partial manifests.
+
+==================================================
+11. PUBLISH
+==================================================
+
+Implement:
+
+scripts/nautical/publish.sh
+
+Use:
+
+validated staged publish with rollback
+
+Do not describe as fully atomic.
+
+Requirements:
+
+- re-run validate.sh
+- abort if public manifest absent
+- abort unless public validation.status === "PASS"
+- stage exactly 5 files in TMP
+- verify exactly 5 files
+- verify all non-empty
+- preserve existing DEST as BACKUP
+- move TMP to DEST
+- restore BACKUP on failure
+- remove BACKUP only after success
+- document same-filesystem assumption
+
+Allowlist:
+
+- navigation-marks.geojson
+- depth-areas.geojson
+- depth-contours.geojson
+- soundings.geojson
+- pipeline-manifest.public.json
+
+Destination:
+
+artifacts/dolphin/public/nautical/
+
+Never copy raw/.
+Never copy intermediate/.
+No symlinks.
+
+==================================================
+12. END-TO-END EXECUTION
+==================================================
+
+Run explicitly:
+
+./scripts/nautical/verify-checksums.sh
+./scripts/nautical/extract-metadata.sh
+./scripts/nautical/extract-raw.sh
+./scripts/nautical/normalize.sh
+./scripts/nautical/validate.sh
+./scripts/nautical/write-manifests.sh
+./scripts/nautical/publish.sh
+
+Do not declare success unless every command exits 0.
+
+==================================================
+13. POST-RUN AUDIT
+==================================================
+
+After successful run, report:
+
+- exact Git status
+- confirmation raw .000 files still exist locally
+- confirmation raw .000 files are no longer tracked
+- checksum results
+- GDAL version
+- S57 driver status
+- exact intermediate counts per class/cell
+- exact normalized counts
+- SOUNDG:
+  - source features
+  - coordinates
+  - above count
+  - below count
+  - at count
+  - Z min/max per cell
+- geometry types
+- bbox validation
+- unique pipelineFeatureId result
+- LNAM type result
+- JSON round-trip result
+- manifest pipelineRunId
+- validation result
+- public directory exact file listing
+- processed file sizes
+- public file sizes
+
+==================================================
+14. REGRESSION SAFETY
+==================================================
+
+Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+
+and:
+
+pnpm --filter @workspace/dolphin build
+
+Even though no frontend application behavior should change.
+
+Do not claim app behavior manually verified from these commands.
+
+==================================================
+15. FINAL REPORT
+==================================================
+
+Return:
+
+1. Files added
+2. Files modified
+3. Git tracking remediation result
+4. Environment verification
+5. Checksum results
+6. Extraction results
+7. Metadata extraction results
+8. Normalization results
+9. SOUNDG signed-distribution results
+10. Validation summary
+11. JSON round-trip summary
+12. Manifest summary
+13. Publish summary
+14. TypeScript result
+15. Build result
+16. Any deviations from plan
+17. Any new blockers
+18. Explicit GO / NO-GO recommendation for Task #8
+
+Do not start Task #8.
