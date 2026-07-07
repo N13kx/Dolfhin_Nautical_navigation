@@ -122,12 +122,19 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         onMapLoad?.();
       });
 
-      // Re-apply overlays after every style swap (setStyle wipes all sources+layers)
-      const handleStyleData = () => {
-        if (!map.current) return; // guard against post-cleanup styledata events
+      // Re-apply overlays after every style swap (setStyle wipes all sources+layers).
+      //
+      // We listen to 'style.load' (not 'styledata') because when Satellite→Hybrid
+      // the two styles share an identical base (same esri source + layer). MapLibre's
+      // diff algorithm finds zero changes and may skip or short-circuit the styledata
+      // emission before addSource/addLayer are safe to call. 'style.load' fires exactly
+      // once per setStyle call, after the diff is committed and the style is fully
+      // initialised, making it safe to mutate sources and layers.
+      const handleStyleLoad = () => {
+        if (!map.current) return; // guard against post-cleanup events
         applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
       };
-      initialMap.on('styledata', handleStyleData);
+      initialMap.on('style.load', handleStyleLoad);
 
       // User drags or rotates → notify parent to exit tracking mode
       const handleUserInteraction = () => {
@@ -137,7 +144,7 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
       initialMap.on('rotatestart', handleUserInteraction);
 
       return () => {
-        initialMap.off('styledata', handleStyleData);
+        initialMap.off('style.load', handleStyleLoad);
         initialMap.off('dragstart', handleUserInteraction);
         initialMap.off('rotatestart', handleUserInteraction);
         // Null the ref BEFORE remove() so that any styledata events queued

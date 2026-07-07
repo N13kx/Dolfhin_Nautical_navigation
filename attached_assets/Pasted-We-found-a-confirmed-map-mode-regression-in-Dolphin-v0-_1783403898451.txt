@@ -1,0 +1,98 @@
+We found a confirmed map-mode regression in Dolphin v0.2.1.
+
+GOAL:
+Fix Hybrid overlay restoration when switching from Satellite to Hybrid.
+
+CONFIRMED BEHAVIOR:
+
+Dolphin Nav -> Hybrid
+- Community seamarks are visible correctly
+
+Satellite -> Hybrid
+- Community seamarks are missing
+
+This proves the OpenSeaMap source itself works, but the overlay restoration path differs depending on the previous map mode.
+
+IMPORTANT:
+- Keep the fix minimal and targeted.
+- Do not start IENC integration.
+- Do not modify settings, GPS, vessel profile, units, themes, search, or PDOK architecture.
+- Work only on the current branch.
+- Do not redesign map modes.
+
+TASKS:
+
+1. Trace the actual mode-switch code paths for:
+   - Dolphin Nav -> Hybrid
+   - Satellite -> Hybrid
+   - Hybrid -> Satellite
+   - Hybrid -> Dolphin Nav
+
+2. Inspect:
+   - MapLibre style changes
+   - styledata handlers
+   - load handlers
+   - NauticalLayerRegistry
+   - OpenSeaMap source registration
+   - OpenSeaMap layer registration
+   - osmVisible state
+   - osmVisibleRef
+   - layer visibility restoration
+   - source/layer existence checks
+   - style object identity
+   - timing/race conditions
+
+3. Identify the exact root cause.
+Do not guess.
+
+4. Fix Hybrid so that Community seamarks are restored correctly regardless of previous mode.
+
+Expected behavior:
+
+Dolphin Nav -> Hybrid
+- Community seamarks visible when enabled
+
+Satellite -> Hybrid
+- Community seamarks visible when enabled
+
+Hybrid -> Satellite
+- Community seamarks hidden
+
+Satellite -> Hybrid -> Satellite -> Hybrid
+- correct every time
+
+Dolphin Nav -> Hybrid -> Dolphin Nav -> Hybrid
+- correct every time
+
+5. Preserve user toggle state:
+- if Community seamarks are ON, they must return after switching back to Hybrid
+- if OFF, they must stay OFF
+
+6. Ensure:
+- no duplicate source
+- no duplicate layer
+- no duplicate style listeners
+- no stale closure
+- no race-condition re-removal after restore
+- no map recreation
+
+VALIDATE:
+
+- 20 rapid switches across all three map modes
+- Satellite -> Hybrid
+- Hybrid -> Satellite -> Hybrid
+- Dolphin -> Hybrid
+- toggle ON/OFF across switches
+- TypeScript check
+- production build
+
+FINAL REPORT:
+
+1. exact root cause
+2. exact files changed
+3. why Dolphin->Hybrid worked but Satellite->Hybrid failed
+4. how state is preserved
+5. typecheck result
+6. build result
+
+Do not continue to IENC work.
