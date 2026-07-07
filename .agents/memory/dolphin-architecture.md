@@ -1,71 +1,38 @@
 ---
-name: Dolphin Navigation Architecture
-description: Module layout, key decisions, and runtime crash fixes for the Dolphin PWA.
+name: Dolphin Architecture
+description: Module layout, Hybrid mode fix, GPS tracking, search UX, nautical investigation findings.
 ---
 
-# Dolphin Alpha 0.1.1 Architecture
+## Module layout (confirmed on disk)
 
-## Module layout (src/modules/)
-- **map/** — MapMode/TrackingMode types, MAP_STYLES, overlayManager (hybrid tile overlays)
-- **navigation/** — GpsPosition/GpsError/GpsQuality types, gpsUtils, useGeolocation hook
-- **nautical/** — NauticalDataProvider interface (placeholder)
-- **environment/** — WeatherProvider interface (placeholder)
-- **vessel/** — Vessel/VesselState types, boatMarker DOM utilities
-- **community/** — CommunityProvider interface (placeholder)
-- **intelligence/** — Route planning types (placeholder)
+Only four real nautical/map modules exist:
+- `modules/nautical/types.ts` — BBox, NauticalObject, DepthContour, NauticalDataProvider (placeholder interface)
+- `modules/map/overlayManager.ts` — OverlaySpec, applyOverlays() (demo route + OpenSeaMap)
+- `modules/map/styles.ts` — three MapLibre StyleSpecification literals (Dolphin/Satellite/Hybrid)
+- `modules/map/types.ts` — MapMode, TrackingMode, MapViewRef
 
-## Service layout (src/services/)
-- **search/types.ts** — SearchResult, SearchProvider interface
-- **search/nominatim.ts** — Nominatim OSM geocoder
+Community, environment, intelligence modules are interfaces only. NauticalLayerRegistry, useNauticalOverlays, NauticalObjectSheet, EncFeatureTypes do NOT exist on disk.
 
-## Key decisions
+## Stabilization pass (v0.2)
 
-### Hybrid mode fix
-HYBRID_STYLE and SATELLITE_STYLE are separate object literals (same content, different references).
-MapLibre compares style object references so separate objects guarantee styledata fires on Satellite↔Hybrid switch.
-overlayManager listens to styledata and re-applies OpenSeaMap + demo route overlays after every style swap.
-map.current is set to null BEFORE initialMap.remove() so post-removal styledata events don't apply overlays to a dead instance.
+- Hybrid mode: `osmVisible` initialized `true` so OpenSeaMap loads by default
+- LayerSheet: mode cards and Hybrid toggle visible together (not close-before-visible)
+- PDOK lines: removed from UI (fetch/cache preserved in overlayManager)
 
-### Runtime crash fix (iPhone Safari — "null is not an object evaluating n2[0]")
-Three converging bugs; all fixed:
+## Nautical investigation (v0.2.1)
 
-**Bug 1 — center: undefined passed to MapLibre easeTo (PRIMARY)**
-MapView.tsx was forwarding opts.center directly even when undefined.
-MapLibre 5.x treats {center: undefined} differently from {}; in some internal paths it converts undefined to null before LngLat.convert(), which then does null[0] → crash.
-Fix: MapView.easeTo() builds easeOptions conditionally — only adds center/bearing/zoom keys when the value is present AND Number.isFinite().
+Investigation report at `nautical-investigation/REPORT.md`. Key findings:
 
-**Bug 2 — Orphaned Marker after StrictMode map recreation**
-boatMarkerRef.current was never reset when the MapLibre map instance was destroyed and recreated (React StrictMode).
-Calling marker.setLngLat() on a Marker attached to a removed map caused MapLibre to access null transform internals → null[0] crash.
-Fix: DolphinApp tracks which map instance the marker was added to in markerMapRef. When the instance changes, the old marker is .remove()d and a new one is created on the new instance.
+**Cells:** 1R76W8LI (edition 78, 2026-06-17, bbox 4.133°–4.333°E, 51.575°–51.625°N) and 1R7788RI (edition 46, 2026-06-29, bbox 4.333°–4.533°E, 51.625°–51.675°N). Both IENC Ed 2.4, 1:2000 scale, Rijkswaterstaat (AGEN=7979).
 
-**Bug 3 — NaN heading not caught**
-iOS Safari returns NaN (not null) for heading when stationary; heading !== null passes, NaN gets passed to MapLibre bearing → crash.
-Fix: isValidHeading() uses Number.isFinite() instead of !== null throughout. Same for isValidSpeed().
+**Cells are diagonally adjacent** (corner-touching), NOT edge-adjacent — no seam analysis applies.
 
-### Diagnostic error boundary
-diagnostics.ts holds a module-level snapshot (no coordinates) updated by DolphinApp every render.
-ErrorBoundary.tsx is a React class component that catches React lifecycle errors AND installs window.onerror + window.unhandledrejection listeners for MapLibre event handler errors.
-Vite HMR overlay is NOT suppressed.
+**GDAL:** 3.2.2 at `~/.nix-profile/bin/` (needs PATH export). S-57 driver confirmed. DSPM is not a separate GDAL layer — all DSID/DSSI/DSPM fields are in the DSID layer.
 
-### Tracking mode snap-back fix
-trackingModeRef mirrors trackingMode state and is read inside the GPS position effect instead of the state value.
-Prevents race where GPS update fires in same React scheduler tick as drag event.
+**Blocking unknowns before any depth display:**
+- VDAT=24 and SDAT=42 exceed standard S-57 tables — exact datum UNKNOWN, requires IENC Product Specification 2.4
+- Rijkswaterstaat data licence terms unconfirmed
 
-### GPS staleness
-useGeolocation runs setInterval every 5s to check if position.timestamp >10s old, marks isStale=true.
+**Why:** Depth values are safety-critical; displaying them against an unknown datum could mislead sailors.
 
-### GPS quality colors
-good (≤10m): teal #44e4c2, moderate (≤30m): amber #f5a623, poor (>30m): red #e25555
-
-### Search UX
-SearchBar uses onPointerDown + preventDefault on result buttons to prevent input blur before selection on mobile.
-Nominatim wrapped behind SearchProvider interface for future nautical search substitution.
-
-### TrackingMode state machine
-free → (tap locate) → follow → (tap locate) → courseUp → (tap locate) → free + bearing reset
-drag OR rotate on map → free
-
-## Build
-Requires PORT and BASE_PATH env vars: `PORT=3000 BASE_PATH=/ pnpm run build`
-Large chunk warning (~1270kb) — maplibre-gl is the main contributor; acceptable for MVP.
+**GDAL sign convention:** Z values are elevations — negative Z = below sounding datum (navigable depth), positive Z = above datum (dry/shallow).

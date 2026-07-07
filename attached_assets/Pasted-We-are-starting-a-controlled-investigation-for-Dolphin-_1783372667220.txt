@@ -1,0 +1,385 @@
+We are starting a controlled investigation for Dolphin v0.2.1 Nautical Data.
+
+MODE:
+PLAN / RESEARCH ONLY.
+
+IMPORTANT:
+- Do not modify code.
+- Do not create files.
+- Do not move files.
+- Do not install packages.
+- Do not alter Git state.
+- Do not render the chart cells.
+- Do not integrate data into the app.
+- Do not fabricate nautical metadata.
+- Do not start routing.
+- Do not propose implementation as completed work.
+
+The goal is to inspect the current Dolphin codebase and reason about two real official Dutch IENC/S-57 cells:
+
+- 1R76W8LI.000
+- 1R76W8RI.000
+
+Treat them as read-only source samples.
+
+==================================================
+1. AUDIT CURRENT DOLPHIN NAUTICAL ARCHITECTURE
+==================================================
+
+Inspect the current codebase and identify all reusable components related to:
+
+- provenance
+- NauticalLayerRegistry
+- ENC/IENC types
+- EncGeoJsonProvider
+- depth types
+- nautical object types
+- NauticalObjectSheet
+- map source management
+- source/layer restoration
+- validation utilities
+- Zeeland placeholders
+- any ingestion-related code
+
+Report:
+
+- what already exists
+- what is reusable
+- what is incomplete
+- what is duplicated
+- what should not be rebuilt
+
+Do not propose a second competing architecture unless current code is demonstrably unsuitable.
+
+==================================================
+2. INSPECT THE TWO SOURCE FILES CONCEPTUALLY
+==================================================
+
+Reason about the two real source cells as S-57/IENC base cells.
+
+For both:
+
+- 1R76W8LI.000
+- 1R76W8RI.000
+
+Determine what can be safely inferred from:
+- filename
+- file structure
+- known S-57 conventions
+- available metadata
+- current project context
+
+Clearly separate:
+
+A. verified fact
+B. likely interpretation
+C. unknown
+
+Do not label any date as issue date or update date unless formally decoded.
+
+==================================================
+3. TOOLING REQUIREMENTS
+==================================================
+
+Plan how to verify the actual environment for:
+
+- GDAL
+- ogrinfo
+- ogr2ogr
+- S-57 driver support
+
+Do not install anything.
+
+Provide exact commands that should later be run in an implementation/investigation step.
+
+Explain what each command proves.
+
+Include:
+
+gdalinfo --version
+ogrinfo --version
+ogr2ogr --version
+ogrinfo --formats
+
+Also explain how to verify explicit S-57 driver availability.
+
+==================================================
+4. FORMAL METADATA EXTRACTION PLAN
+==================================================
+
+Design a method to formally extract and compare:
+
+- dataset name
+- edition number
+- update number
+- issue date
+- update application date
+- standard edition
+- product specification
+- producer agency
+- intended usage
+- compilation scale
+- horizontal datum
+- vertical datum
+- sounding datum
+- coordinate multiplier
+- sounding multiplier
+
+For every field define:
+
+- source record/field if known
+- extraction method
+- raw value
+- interpreted value
+- confidence
+- unknown handling
+
+Do not guess missing values.
+
+==================================================
+5. OBJECT CLASS INVENTORY PLAN
+==================================================
+
+Design a read-only inventory method that produces, per cell:
+
+- raw object class
+- feature count
+- geometry type(s)
+- attribute count
+- example record identifiers
+
+Do not assume classes are present.
+
+Then define how to compare:
+
+- classes in both cells
+- classes only in LI
+- classes only in RI
+- major count differences
+
+==================================================
+6. ATTRIBUTE INVENTORY PLAN
+==================================================
+
+Design a method to inspect, per object class:
+
+- raw attribute names
+- data type
+- example values
+- null/missing rate
+- distinct value count where practical
+- possible encoded enumerations
+
+Do not normalize yet.
+Do not discard unknown attributes.
+
+==================================================
+7. GEOMETRY INVENTORY PLAN
+==================================================
+
+Define how to inspect:
+
+- bbox
+- point count
+- line count
+- polygon count
+- 2D geometries
+- 3D/sounding geometries
+- invalid geometries
+- empty geometries
+- NaN/Infinity
+- coordinate range sanity
+
+Do not simplify or reproject during investigation.
+
+==================================================
+8. TWO-CELL BOUNDARY ANALYSIS
+==================================================
+
+Because the cells are adjacent, design a comparison method for:
+
+- bbox relationship
+- overlap area
+- touching boundaries
+- repeated source IDs
+- repeated geometries
+- duplicate-looking features near the shared edge
+- line continuity across cells
+- polygon continuity across cells
+- seam artifacts
+- whether IDs appear cell-scoped or globally stable
+
+Do not recommend automatic deduplication yet.
+
+Define evidence thresholds for:
+- exact duplicate
+- likely duplicate
+- adjacent continuation
+- unrelated feature
+
+==================================================
+9. UPDATE / EDITION ANALYSIS
+==================================================
+
+Plan how to distinguish:
+
+- base .000 cell
+- companion .001/.002 updates
+- replacement edition
+- update number
+- complete replacement base cell
+
+Separate:
+
+A. what the files themselves prove
+B. what S-57 documentation says
+C. what remains unknown about the Dutch publication process
+
+==================================================
+10. DEPTH SEMANTICS
+==================================================
+
+This is critical.
+
+Design an investigation specifically for:
+
+- depth areas
+- depth contours
+- soundings
+- vertical datum
+- sounding datum
+- units
+- whether values represent charted depth, sounding, area range, or another concept
+
+Do not assume any numeric depth is current real-time water depth.
+
+Explain what evidence is required before Dolphin may display:
+
+"Chart depth: X m"
+
+==================================================
+11. NATIONWIDE SCALING MODEL
+==================================================
+
+The user has official S-57/IENC files for all of the Netherlands.
+
+Do not design this as a Zeeland-only one-off.
+
+Propose a scalable model for:
+
+- national cell catalog
+- region grouping
+- cell manifest
+- raw source archive
+- checksums
+- editions
+- updates
+- processed outputs
+- viewport-based loading
+- route-corridor loading
+- caching
+
+Zeeland is the pilot, not the final architecture.
+
+==================================================
+12. DOLPHIN INGESTION DESIGN
+==================================================
+
+Propose a safe pipeline:
+
+Official source files
+-> immutable raw archive
+-> checksum manifest
+-> S-57 capable reader
+-> formal metadata extraction
+-> object inventory
+-> attribute inventory
+-> selected normalization
+-> validation
+-> intermediate output
+-> web-consumable output
+
+Evaluate:
+
+- GeoJSON per raw object class
+- GeoJSON per Dolphin feature group
+- vector tiles later
+- another intermediate representation
+
+Recommend one approach for:
+A. current alpha
+B. national scale later
+
+==================================================
+13. GIT AND SOURCE SAFETY
+==================================================
+
+Recommend how to prevent:
+
+- source .000 files from being mutated
+- accidental public exposure
+- accidental production bundling
+- large raw files being committed to Git
+- generated files cluttering the repository
+
+Propose:
+
+- directories
+- .gitignore strategy
+- manifest strategy
+- checksum strategy
+
+Do not change files now.
+
+==================================================
+14. RISK REGISTER
+==================================================
+
+Create a concise risk register for:
+
+- wrong datum interpretation
+- missed update files
+- duplicate features across cells
+- cell seam artifacts
+- wrong object class mapping
+- lost raw attributes
+- oversized GeoJSON
+- mobile performance
+- licensing/redistribution assumptions
+- stale chart data
+- false "official" claims
+
+For each risk provide:
+
+- impact
+- likelihood
+- mitigation
+- blocking or non-blocking status
+
+==================================================
+15. FINAL PLAN
+==================================================
+
+Return a structured plan with:
+
+1. Current reusable Dolphin architecture
+2. Confirmed facts about the two cells
+3. Unknowns
+4. Required tooling checks
+5. Metadata extraction method
+6. Object inventory method
+7. Attribute inventory method
+8. Geometry inventory method
+9. Two-cell seam analysis
+10. Depth semantics investigation
+11. Nationwide scaling architecture
+12. Proposed ingestion pipeline
+13. Git/source safety
+14. Risk register
+15. Exact next implementation step
+
+Do not modify the project.
+Do not claim implementation is complete.
+Do not fabricate source semantics.
+
+The output should be a technical investigation and implementation plan only.

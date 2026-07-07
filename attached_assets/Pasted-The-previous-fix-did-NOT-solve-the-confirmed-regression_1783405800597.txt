@@ -1,0 +1,200 @@
+The previous fix did NOT solve the confirmed regression.
+
+CONFIRMED MANUAL TEST:
+Satellite -> Hybrid still does not show Community seamarks.
+
+Therefore:
+- the previous root-cause analysis was incomplete or wrong
+- the style.load-only fix is not accepted
+- do not proceed to IENC integration
+
+GOAL:
+Find and fix the actual mode-transition bug with a minimal, evidence-based change.
+
+IMPORTANT:
+- Work only on the current branch.
+- Do not start IENC integration.
+- Do not modify settings, GPS, vessel profile, themes, units, search, or PDOK architecture.
+- Do not claim success from TypeScript/build alone.
+- The manual user test is the source of truth.
+
+==================================================
+1. RE-OPEN THE INVESTIGATION
+==================================================
+
+Confirmed behavior:
+
+Dolphin -> Hybrid
+- Community seamarks visible
+
+Satellite -> Hybrid
+- Community seamarks missing
+
+Previous attempted fix:
+- replaced styledata listener with style.load listener
+
+Manual result:
+- still broken
+
+Therefore explicitly audit whether style.load fires at all for:
+Satellite -> Hybrid
+
+Do not assume it does.
+
+Add temporary targeted diagnostics if needed for investigation, then remove them before finalizing.
+
+Trace:
+
+- current mode
+- previous mode
+- whether setStyle is called
+- whether style.load fires
+- whether applyOverlays runs
+- whether OpenSeaMap source exists
+- whether OpenSeaMap layer exists
+- visibility state
+- osmVisibleRef/current value
+- errors from addSource/addLayer
+- later code that may remove the layer again
+
+Do not swallow relevant exceptions silently during diagnosis.
+
+==================================================
+2. AUDIT MODE MODEL
+==================================================
+
+Satellite and Hybrid share the same ESRI base content.
+
+Determine whether calling setStyle during:
+
+Satellite -> Hybrid
+Hybrid -> Satellite
+
+is unnecessary and is itself the bug source.
+
+Evaluate this transition model:
+
+A. Dolphin -> Satellite
+- base changes OSM -> ESRI
+- setStyle required
+
+B. Dolphin -> Hybrid
+- base changes OSM -> ESRI
+- setStyle required
+- then apply Hybrid overlays
+
+C. Satellite -> Hybrid
+- base remains ESRI
+- do NOT call setStyle
+- apply Hybrid overlays directly
+
+D. Hybrid -> Satellite
+- base remains ESRI
+- do NOT call setStyle
+- remove Hybrid-only overlays directly
+
+E. Hybrid -> Dolphin
+- base changes ESRI -> OSM
+- setStyle required
+
+Do not implement this model blindly.
+First confirm it matches the current architecture.
+
+==================================================
+3. FIX THE ACTUAL TRANSITION
+==================================================
+
+Preferred principle:
+
+Base-style lifecycle and overlay lifecycle must be separate.
+
+A map mode change should:
+1. change base style only when the base style actually differs
+2. independently reconcile overlays for the target mode
+
+Do not rely solely on style.load or styledata for same-base-style mode changes.
+
+Create one deterministic reconciliation path such as:
+
+reconcileMapMode(targetMode)
+
+that:
+- determines whether base style must change
+- waits for style readiness only when a real style change occurs
+- applies/removes overlays for the target mode
+- preserves user overlay toggle state
+- is idempotent
+
+Do not recreate the MapLibre map.
+
+==================================================
+4. ERROR HANDLING
+==================================================
+
+During investigation:
+- do not silently swallow addSource/addLayer failures
+
+For final code:
+- handle errors safely
+- but preserve useful diagnostic context
+
+Check specifically whether:
+- overlay is added and then removed by another effect
+- stale mode state causes Satellite overlays to win
+- multiple effects race
+- previous-mode cleanup runs after Hybrid apply
+- zero-diff setStyle prevents expected lifecycle events
+
+==================================================
+5. MANUAL-BEHAVIOR VALIDATION
+==================================================
+
+The implementation is only acceptable if the actual code path supports:
+
+Satellite -> Hybrid
+- seamarks visible when ON
+
+Hybrid -> Satellite
+- seamarks hidden
+
+Satellite -> Hybrid -> Satellite -> Hybrid
+- correct every time
+
+Dolphin -> Hybrid
+- correct
+
+Dolphin -> Satellite -> Hybrid
+- correct
+
+Hybrid seamarks OFF
+-> Satellite
+-> Hybrid
+- remain OFF
+
+Hybrid seamarks ON
+-> Satellite
+-> Hybrid
+- return ON
+
+Rapid switching:
+- no duplicates
+- no missing overlays
+- no black map
+- no stale overlays
+
+==================================================
+6. FINAL REPORT
+==================================================
+
+Report:
+
+1. Why the previous style.load fix failed
+2. Whether style.load fired on Satellite -> Hybrid
+3. Exact actual root cause
+4. Exact files changed
+5. Whether same-base transitions still call setStyle
+6. How overlay reconciliation now works independently
+7. TypeScript result
+8. Build result
+
+Do not continue to IENC work.

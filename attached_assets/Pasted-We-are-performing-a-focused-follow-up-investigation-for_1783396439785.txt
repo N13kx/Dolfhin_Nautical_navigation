@@ -1,0 +1,84 @@
+We are performing a focused follow-up investigation for Dolphin v0.2.1.
+
+GOAL:
+Resolve the currently blocked Inland ENC depth datum semantics.
+
+Do not modify the Dolphin app.
+Do not render chart data.
+Do not integrate features.
+Do not normalize objects yet.
+
+Use the completed:
+nautical-investigation/REPORT.md
+
+Current blocking findings:
+- DSPM VDAT = 24
+- DSPM SDAT = 42
+- current report marks both as UNKNOWN
+- depth display is blocked until these values are formally decoded
+
+TASKS:
+
+1. Identify the exact Inland ENC standard/profile used by the two pilot cells from:
+   - DSID STED
+   - PRSP
+   - PSDN
+   - PRED
+   - PROF
+   - Feature Catalogue characteristics
+   - national/inland object classes present
+
+2. Consult only traceable official or standards-body documentation, prioritizing:
+   - CESNI Inland ECDIS Edition 2.4 documentation
+   - IENC Product Specification 2.4
+   - Feature Catalogue Ed. 2.4
+   - Inland ENC Encoding Guide 2.4.x
+   - IHO S-57 Ed. 3.1 where applicable
+
+3. Formally resolve:
+   - VDAT code 24
+   - SDAT code 42
+
+For each provide:
+   - raw code
+   - authoritative label
+   - authoritative definition
+   - source document title
+   - edition/version
+   - section/table/field reference
+   - confidence
+   - whether the code is base S-57 or Inland-ENC-specific
+
+4. Check whether m_vdat or m_sdat meta objects are present in either cell.
+   If present:
+   - inventory them
+   - determine whether they override DSPM defaults spatially
+   - do not alter any features
+
+5. Re-evaluate DEPARE, DEPCNT and SOUNDG semantics under the resolved datum model.
+
+6. State one of:
+   A. DEPTH DISPLAY CLEARED FOR PROTOTYPE
+   B. DEPTH DISPLAY STILL BLOCKED
+
+7. If cleared, define exactly what Dolphin may say, for example:
+   - "Charted depth"
+   - datum label
+   - chart/source date
+   - not real-time depth
+
+8. If blocked, identify the exact remaining missing evidence.
+
+9. Write results to:
+   nautical-investigation/DATUM-RESOLUTION.md
+
+Finding labels must remain:
+- VERIFIED_FROM_FILE
+- VERIFIED_FROM_OFFICIAL_DOCUMENTATION
+- INFERRED
+- UNKNOWN
+
+Every VERIFIED_FROM_OFFICIAL_DOCUMENTATION claim must include a traceable source.
+
+Do not change application code.
+Do not render anything.

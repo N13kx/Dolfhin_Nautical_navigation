@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { DolphinApp } from './pages/DolphinApp';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { SettingsProvider } from './modules/settings/SettingsContext';
+import { VesselProfileProvider } from './modules/vessel/VesselProfileContext';
 
 function App() {
   useEffect(() => {
@@ -18,7 +20,11 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <DolphinApp />
+      <SettingsProvider>
+        <VesselProfileProvider>
+          <DolphinApp />
+        </VesselProfileProvider>
+      </SettingsProvider>
     </ErrorBoundary>
   );
 }

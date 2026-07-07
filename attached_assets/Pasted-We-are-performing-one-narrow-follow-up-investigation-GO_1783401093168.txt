@@ -1,0 +1,100 @@
+We are performing one narrow follow-up investigation.
+
+GOAL:
+Authoritatively resolve DSPM SDAT=42 for the two Dolphin pilot IENC cells.
+
+Do not modify the Dolphin app.
+Do not render chart data.
+Do not integrate features.
+Do not normalize objects.
+Do not change REPORT.md.
+Do not broaden scope.
+
+Current state:
+- VDAT=24 has been resolved as "Local Datum"
+- SDAT=42 remains UNKNOWN
+- depth display remains BLOCKED
+- the prior investigation identified IENC Product Specification / Feature Catalogue 2.4 as the governing profile family
+- HTTP retrieval of the relevant Feature Catalogue content failed
+- the report identified local Git/XML inspection as the fastest remaining path
+
+TASKS:
+
+1. Obtain the authoritative IENC Feature Catalogue Edition 2.4 source/package from its traceable official or standards-body source.
+
+2. Record:
+- source organization
+- source location
+- exact edition/version
+- retrieval date
+- file checksum where practical
+
+3. Inspect the Feature Catalogue XML directly using reproducible local tools such as:
+- xmllint
+- grep
+- XPath
+or another transparent XML query method.
+
+4. Locate the exact enumeration governing the datum value used by DSPM SDAT and/or the applicable VERDAT concept.
+
+5. Search specifically for raw code:
+42
+
+6. Determine one of:
+
+A. code 42 is authoritatively defined
+B. code 42 is absent from IENC FC 2.4
+C. code 42 exists only in another authoritative extension/register
+D. evidence remains insufficient
+
+7. If code 42 is found, report:
+- exact enumeration/code
+- exact label
+- exact definition
+- catalogue/attribute name
+- document/package title
+- edition/version
+- XML element/path or table/section
+- whether base S-57, IENC-specific, national extension, or another mechanism
+
+8. Cross-check the result against:
+- current IHO Geospatial Information Registry
+- applicable IENC documentation
+
+Do not silently resolve conflicts.
+Report each source separately.
+
+9. Reassess only:
+DEPTH DISPLAY CLEARED FOR PROTOTYPE
+or
+DEPTH DISPLAY STILL BLOCKED
+
+A CLEARED verdict still requires all six prior conditions.
+
+10. Also audit one prior claim:
+"For Rijkswaterstaat cells, VDAT=24 Local Datum equals NAP."
+
+Determine whether this is:
+- VERIFIED_FROM_FILE
+- VERIFIED_FROM_OFFICIAL_DOCUMENTATION
+- INFERRED
+- UNKNOWN
+
+Do not preserve the NAP claim as verified without dataset-specific evidence.
+
+11. Audit the prior statement:
+"bridge clearances are safe to display."
+
+Do not treat all non-depth numeric vertical information as automatically safe.
+State whether bridge/overhead clearance requires separate vertical-datum validation.
+
+Write:
+nautical-investigation/SDAT42-RESOLUTION.md
+
+At the end report only:
+1. SDAT=42 result
+2. authoritative source
+3. depth verdict
+4. NAP claim status
+5. bridge-clearance status
+6. remaining blocker, if any
