@@ -1,0 +1,31 @@
+{
+  "pipelineSchemaVersion": 1,
+  "pipelineRunId": "2026-07-07T08:44:07Z-0af461ad",
+  "generatedAt": "2026-07-07T08:44:07.372Z",
+  "validation": {
+    "status": "PASS",
+    "validatedAt": "2026-07-07T08:44:07.372Z"
+  },
+  "sources": [
+    {
+      "cellId": "1R76W8LI",
+      "edition": "78",
+      "issueDate": "20260617",
+      "updateApplicationDate": "20260617",
+      "producer": "Rijkswaterstaat"
+    },
+    {
+      "cellId": "1R7788RI",
+      "edition": "46",
+      "issueDate": "20260629",
+      "updateApplicationDate": "20260629",
+      "producer": "Rijkswaterstaat"
+    }
+  ],
+  "depthDatum": "Approximate LAT",
+  "depthDatumStatus": "VERIFIED_FROM_OFFICIAL_DOCUMENTATION",
+  "disclaimers": [
+    "Charted depths are not real-time water depth",
+    "Not for navigation"
+  ]
+}

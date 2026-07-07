@@ -47,3 +47,13 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# IENC raw source files — large binary; must be provisioned from the official
+# source (Rijkswaterstaat) with SHA-256 verification before any pipeline run.
+# Both files were removed from the Git index via 'git rm --cached' on 2026-07-07.
+# See data/nautical/README.md for provisioning instructions.
+attached_assets/*.000
+
+# IENC pipeline intermediate data — generated; never commit
+data/nautical/raw/
+data/nautical/intermediate/
