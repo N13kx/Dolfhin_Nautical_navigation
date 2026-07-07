@@ -62,7 +62,7 @@ echo "  Public manifest: validation.status=PASS"
 # Step 1: Create TMP staging directory
 mkdir -p "$TMP"
 
-# Step 2: Copy exactly the allowlisted files
+# Step 2: Copy exactly the allowlisted files (no symlinks permitted)
 for f in "${ALLOWLIST[@]}"; do
   SRC="$PROCESSED_DIR/$f"
   if [ ! -f "$SRC" ]; then
@@ -70,8 +70,21 @@ for f in "${ALLOWLIST[@]}"; do
     rm -rf "$TMP"
     exit 1
   fi
+  if [ -L "$SRC" ]; then
+    echo "ERROR: Allowlisted file is a symlink — not permitted: $SRC" >&2
+    rm -rf "$TMP"
+    exit 1
+  fi
   cp "$SRC" "$TMP/$f"
 done
+
+# Verify no symlinks in staging directory
+SYMLINKS="$(find "$TMP" -maxdepth 1 -type l 2>/dev/null)"
+if [ -n "$SYMLINKS" ]; then
+  echo "ERROR: Symlinks found in staging directory — not permitted: $SYMLINKS" >&2
+  rm -rf "$TMP"
+  exit 1
+fi
 
 # Step 3: Verify exactly 5 files in TMP, all non-empty
 COUNT="$(find "$TMP" -maxdepth 1 -type f | wc -l)"

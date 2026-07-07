@@ -75,16 +75,28 @@ for cell_entry in "${CELLS[@]}"; do
     # to the pre-seeded content.
     echo '{"type":"FeatureCollection","features":[]}' > "$OUT_FILE"
 
+    OGR_ERR_FILE="/tmp/ienc_ogr_err_${CELL_ID}_${CLASS}_$.txt"
+    OGR_EXIT=0
     "$GDAL_BIN/ogr2ogr" \
       -f GeoJSON \
       "$OUT_FILE" \
       "${OPEN_OPTS[@]}" \
       "$SRC" \
       "$CLASS" \
-      2>/dev/null || true
+      2>"$OGR_ERR_FILE" || OGR_EXIT=$?
 
-    # Verify the file is non-empty and valid JSON; restore seed if corrupted
+    if [ "$OGR_EXIT" -ne 0 ]; then
+      # Non-zero exit: layer is likely absent from this cell (count=0 is valid per plan).
+      # This is not silently swallowed — log explicitly so the cause is visible.
+      # validate.sh is the authoritative count gate and will hard-fail if count is wrong.
+      OGR_STDERR="$(cat "$OGR_ERR_FILE" 2>/dev/null || echo '')"
+      echo "    [INFO] ogr2ogr exited $OGR_EXIT for $CELL_ID/$CLASS — layer may be absent. stderr: ${OGR_STDERR:-<empty>}"
+    fi
+    rm -f "$OGR_ERR_FILE"
+
+    # Verify the file is non-empty and valid JSON; restore seed if ogr2ogr produced nothing
     if [ ! -s "$OUT_FILE" ] || ! node -e "JSON.parse(require('fs').readFileSync('$OUT_FILE','utf8'))" 2>/dev/null; then
+      echo "    [INFO] Restoring empty FeatureCollection for $CELL_ID/$CLASS (no valid output from ogr2ogr)"
       echo '{"type":"FeatureCollection","features":[]}' > "$OUT_FILE"
     fi
 
