@@ -1,0 +1,512 @@
+We are starting Dolphin v0.2.1b — Official IENC Integration.
+
+MODE:
+PLAN ONLY.
+
+Work only on the current branch:
+feature/v0.2.1b-official-ienc-integration
+
+Do not implement yet.
+Do not modify application code.
+Do not render IENC data yet.
+Do not merge to main.
+
+==================================================
+MISSION
+==================================================
+
+Plan the first controlled integration of official Dutch IENC/S-57 data into Dolphin.
+
+This phase uses exactly two pilot cells:
+
+- 1R76W8LI
+- 1R7788RI
+
+The goal is to prove a safe, reproducible pipeline from official raw S-57 cells to validated web-safe outputs and then integrate selected official nautical features into Dolphin.
+
+This is NOT:
+- a nationwide rollout
+- routing
+- AI
+- bridge-clearance automation
+- production navigation certification
+
+==================================================
+SOURCE OF TRUTH
+==================================================
+
+First inspect and use the completed investigation artifacts already present in the repository:
+
+- nautical-investigation/REPORT.md
+- nautical-investigation/DATUM-RESOLUTION.md
+- nautical-investigation/SDAT42-RESOLUTION.md if present
+- any other completed investigation evidence files
+
+Critical resolved findings:
+
+- SDAT = 42
+- authoritative label: "Approximate LAT"
+- prototype depth display is cleared under the documented limitations
+- VDAT = 24 = "Local Datum"
+- do NOT assume Local Datum = NAP
+- bridge and overhead clearance remain separately unvalidated for production
+
+Use the canonical source checksums recorded in REPORT.md.
+
+==================================================
+1. VERIFY CURRENT BRANCH REALITY
+==================================================
+
+Before planning implementation, inspect the actual repository.
+
+Confirm:
+
+- current branch name
+- current HEAD
+- recent relevant commits
+- Settings infrastructure exists
+- Vessel profile infrastructure exists
+- deterministic Satellite ↔ Hybrid overlay reconciliation exists
+- GPS and map mode architecture exist
+- investigation reports exist
+- provenance types exist
+- nautical types exist
+- NauticalLayerRegistry exists or not
+- EncGeoJsonProvider exists or not
+- NauticalObjectSheet exists or not
+- current overlay manager
+- current MapLibre source/layer architecture
+
+Explicitly identify any mismatch between assumed architecture and actual files on disk.
+
+Do not design against components that do not exist.
+
+==================================================
+2. DEFINE PILOT SCOPE
+==================================================
+
+The pilot processes only feature classes confirmed present in REPORT.md.
+
+Navigation-mark candidates where actually present:
+
+- BOYLAT
+- BOYCAR
+- BOYSPP
+- BCNLAT
+- BCNCAR
+- BCNSPP
+- LIGHTS
+
+Depth classes:
+
+- DEPARE
+- DEPCNT
+- SOUNDG
+
+Only include classes actually present in the two pilot cells.
+
+Do not fabricate absent classes.
+
+Do not add bridge clearance, locks, routing, or national rollout in this phase.
+
+==================================================
+3. SOURCE SAFETY DESIGN
+==================================================
+
+Plan immutable handling of the two raw .000 cells.
+
+Requirements:
+
+- verify SHA-256 before every processing run
+- abort on checksum mismatch
+- never mutate source files
+- never rename them
+- never move them into public/
+- never bundle them with Vite
+- never expose raw S-57 through the browser
+
+Design a clean separation such as:
+
+data/
+  nautical/
+    raw/
+    intermediate/
+    processed/
+
+Only processed web-safe output may be frontend-accessible.
+
+Plan exact .gitignore rules.
+
+==================================================
+4. REPRODUCIBLE GDAL / S-57 READER MODEL
+==================================================
+
+Use the exact reader conditions documented in REPORT.md.
+
+Plan to pin and record:
+
+- exact GDAL version
+- S57 driver presence
+- S57 open options
+- OGR_S57_OPTIONS
+- update behaviour
+- GDAL_DATA
+- processing commands
+
+If the current environment differs from the investigation environment:
+- detect it
+- report it
+- do not silently proceed
+
+The ingestion must be reproducible.
+
+==================================================
+5. RAW-PRESERVING INTERMEDIATE MODEL
+==================================================
+
+Design an auditable intermediate representation before normalization.
+
+Every extracted feature should preserve where available:
+
+- sourceCellId
+- sourceChecksum
+- rawObjectClass
+- rawAttributes
+- FOID / LNAM / stable source identifier
+- geometry
+- issue date
+- update application date
+- provenance
+- reader version
+- reader options
+- processing timestamp
+
+Unknown raw attributes must not be discarded.
+
+Do not convert directly from S-57 into final UI objects.
+
+==================================================
+6. DEPTH SAFETY MODEL
+==================================================
+
+Use the completed datum-resolution evidence.
+
+Confirmed prototype depth datum:
+
+SDAT = 42
+"Approximate LAT"
+
+Plan exact handling for:
+
+DEPARE:
+- DRVAL1
+- DRVAL2
+
+DEPCNT:
+- VALDCO
+
+SOUNDG:
+- preserve signed Z
+- never apply abs(Z)
+- positive above-datum values must not become navigable depth
+- RI positive soundings require explicit handling
+
+User-facing terminology may use:
+
+- "Charted depth"
+- "Datum: Approximate LAT"
+- formally decoded issue date
+- formally decoded update application date
+- "Not real-time water depth"
+
+Never use:
+
+- "Current depth"
+- "Safe depth"
+- "Guaranteed clearance"
+
+Plan hard validation rules that prevent unsafe conversion.
+
+==================================================
+7. NORMALIZED DOLPHIN OUTPUT
+==================================================
+
+Plan minimum frontend-safe outputs:
+
+- navigation-marks.geojson
+- depth-areas.geojson
+- depth-contours.geojson
+- soundings.geojson
+
+Every normalized feature must retain:
+
+- Dolphin normalized kind
+- sourceProperties
+- provenance
+- sourceCellId
+- rawObjectClass
+- stable source identifier where available
+
+Raw attributes remain preserved in the intermediate layer.
+
+==================================================
+8. VALIDATION GATES
+==================================================
+
+Design mandatory validation per cell and combined.
+
+Validate:
+
+- checksum
+- raw feature count
+- processed feature count
+- geometry validity
+- empty geometry
+- NaN
+- Infinity
+- bbox sanity
+- duplicate IDs
+- missing IDs
+- raw class preservation
+- provenance presence
+- datum presence
+- signed SOUNDG handling
+- fabricated attribute detection
+
+Compare counts against REPORT.md.
+
+Any unexplained major count difference must block rendering.
+
+==================================================
+9. MAP INTEGRATION TARGET
+==================================================
+
+Target mode behaviour:
+
+Dolphin Nav:
+- OSM-based general map
+- Official IENC navigation marks ON
+- Official IENC charted depths ON
+
+Satellite:
+- Esri imagery
+- IENC OFF by default
+- visually clean
+
+Hybrid:
+- Esri imagery
+- Official IENC navigation marks ON
+- Official IENC charted depths ON
+- Community seamarks OFF by default
+
+Classification:
+
+Official IENC:
+- sourceKind: official
+- official: true
+
+OpenSeaMap:
+- sourceKind: community
+- official: false
+
+Never silently merge official and community data.
+
+==================================================
+10. OVERLAY RECONCILIATION
+==================================================
+
+Preserve the current architecture principle:
+
+base style lifecycle
+!=
+overlay lifecycle
+
+Do not reintroduce setStyle dependency for:
+Satellite ↔ Hybrid
+
+Audit the current deterministic reconciliation fix.
+
+Plan target-overlay reconciliation using:
+
+current overlay set
+vs
+target overlay set
+
+Remove only obsolete overlays.
+Add only missing overlays.
+
+Avoid:
+- duplicate sources
+- duplicate layers
+- stale overlays
+- overlays disappearing after mode switch
+- full map recreation
+
+==================================================
+11. LAYER UX
+==================================================
+
+Plan only simple user-facing groups:
+
+- Navigation marks
+- Charted depths
+- Community seamarks
+
+Do not expose raw S-57 class names.
+
+Defaults:
+
+Dolphin Nav:
+- Navigation marks ON
+- Charted depths ON
+
+Satellite:
+- IENC OFF
+
+Hybrid:
+- Navigation marks ON
+- Charted depths ON
+- Community seamarks OFF
+
+==================================================
+12. OBJECT INTERACTION
+==================================================
+
+Reuse NauticalObjectSheet if present.
+
+Do not build a second competing detail system.
+
+Plan only verified fields:
+
+- object type
+- name where available
+- charted value where applicable
+- datum
+- official status
+- source
+- source cell
+- issue date
+- update application date
+
+Never invent missing values.
+
+==================================================
+13. PORTRAYAL SAFETY
+==================================================
+
+Explicitly preserve:
+
+data semantics
+!=
+chart portrayal
+
+For the pilot:
+
+- use restrained Dolphin prototype styling
+- preserve object distinctions
+- do not invent nautical meaning from arbitrary colors
+- do not claim official ENC portrayal
+- do not claim IHO symbol compliance
+- do not claim IEC chart compliance
+
+Document portrayal limitations.
+
+==================================================
+14. PERFORMANCE CONSTRAINTS
+==================================================
+
+This remains a two-cell pilot.
+
+Plan:
+
+- no raw S-57 in browser
+- no repeated fetch loop
+- no duplicate listeners
+- no duplicate MapLibre sources/layers
+- no unnecessary React rerenders
+- iPhone responsive
+- rapid mode switching safe
+- processed file size reported
+
+Do not implement nationwide viewport loading yet.
+
+==================================================
+15. BUILD PHASES
+==================================================
+
+Return a phased implementation plan:
+
+A. branch and source verification
+B. checksum safety
+C. reproducible extraction
+D. raw-preserving intermediate
+E. selected normalization
+F. validation
+G. frontend-safe output
+H. map loading
+I. overlay integration
+J. object interaction
+K. manual iPhone acceptance test
+
+For every phase provide:
+
+- files to add
+- files to modify
+- exact acceptance criteria
+- rollback point
+- blocking risks
+
+==================================================
+16. MANUAL ACCEPTANCE TEST PLAN
+==================================================
+
+Design an iPhone test checklist covering:
+
+- Dolphin Nav
+- Satellite
+- Hybrid
+- Satellite → Hybrid
+- Hybrid → Satellite → Hybrid
+- Dolphin → Hybrid
+- rapid switching
+- official layers ON/OFF
+- Community seamarks ON/OFF
+- official/community separation
+- object tapping
+- charted depth labels
+- positive SOUNDG handling
+- missing file handling
+- empty layer handling
+- GPS regression
+- Settings regression
+- Vessel profile regression
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+Return only:
+
+1. Current branch reality
+2. Missing prerequisites
+3. Existing components to reuse
+4. Exact pilot scope
+5. Source safety design
+6. Reader strategy
+7. Intermediate schema
+8. Selected feature classes
+9. Depth safety model
+10. Validation gates
+11. Output structure
+12. Map integration design
+13. Overlay reconciliation design
+14. Layer UX
+15. Object interaction plan
+16. Portrayal limitations
+17. Performance constraints
+18. Phased implementation plan
+19. Manual acceptance test plan
+20. Exact first build step
+
+Do not implement yet.
+Return the plan only.
