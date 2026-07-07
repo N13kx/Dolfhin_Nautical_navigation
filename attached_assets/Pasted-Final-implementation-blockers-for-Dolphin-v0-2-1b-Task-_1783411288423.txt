@@ -1,0 +1,143 @@
+Final implementation blockers for Dolphin v0.2.1b Task #7.
+
+MODE:
+PLAN PATCH ONLY.
+
+Do not implement yet.
+
+The pipeline design is approved except for the following required corrections.
+
+==================================================
+1. FIX GIT TRACKING GOVERNANCE — BLOCKING
+==================================================
+
+The two raw .000 files are already Git-tracked.
+
+Adding:
+
+attached_assets/*.000
+
+to .gitignore does NOT stop Git from tracking files that are already tracked.
+
+Correct the plan.
+
+Preferred disposition:
+
+- keep both .000 files physically present in the working tree
+- stop tracking them prospectively with:
+
+  git rm --cached -- <exact file paths>
+
+- add:
+  attached_assets/*.000
+  to .gitignore
+
+Requirements:
+
+- do not delete the local source files
+- do not rewrite Git history
+- do not perform destructive rebase
+- document that fresh clones must provision the exact official source files locally
+- checksum verification remains mandatory
+- pipeline aborts when source files are absent
+
+Before applying git rm --cached during implementation:
+- report exact staged effect
+- confirm only the two intended .000 paths are affected
+
+If this disposition is not used, explicitly state that the files remain tracked and do not falsely claim .gitignore resolves existing tracking.
+
+==================================================
+2. FIX PUBLISH TRANSACTION SAFETY — BLOCKING
+==================================================
+
+Do not claim this is atomic:
+
+rm -rf "$DEST" && mv "$TMP" "$DEST"
+
+because DEST can be deleted before TMP placement fails.
+
+Replace with a validated staged publish with rollback:
+
+- build and verify TMP completely
+- rename existing DEST to BACKUP if it exists
+- rename TMP to DEST
+- if TMP → DEST fails:
+  restore BACKUP → DEST
+  exit non-zero
+- only after successful DEST placement:
+  remove BACKUP
+
+Document filesystem assumptions.
+
+Do not overclaim full atomicity.
+Call this:
+
+"validated staged publish with rollback"
+
+==================================================
+3. MANIFEST PASS SEQUENCING
+==================================================
+
+Prevent stale PASS metadata.
+
+Define exact order:
+
+- normalize four GeoJSON outputs
+- validate outputs
+- only after validation succeeds:
+  generate or finalize internal PASS manifest
+  generate public manifest with validation.status = "PASS"
+  set validatedAt
+- publish
+
+A public PASS manifest must never pre-exist for a newly failed output generation.
+
+If publish.sh re-runs validation, that is an additional gate.
+
+==================================================
+4. DEFINE PIPELINE FEATURE ID ALGORITHM
+==================================================
+
+Replace the current example-only wording with one exact deterministic algorithm.
+
+Define:
+- normal feature pipelineFeatureId
+- SOUNDG expanded coordinate pipelineFeatureId
+- coordinate index convention
+- fallback behavior when RCID is absent
+
+Validation must check:
+- pipelineFeatureId present
+- pipelineFeatureId globally unique
+
+Technical pipeline IDs must never be represented as official source identifiers.
+
+==================================================
+5. JSON ROUND-TRIP SAFETY
+==================================================
+
+Add validation that:
+
+- all four GeoJSON outputs parse successfully as JSON
+- every feature serializes successfully
+- output can be read back after writing
+- sourceProperties remain JSON-safe
+- formal source identifiers such as LNAM remain strings
+- no unsafe integer coercion corrupts identifiers
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+Return only:
+
+1. Corrected Git tracking disposition
+2. Corrected staged publish with rollback
+3. Exact manifest sequencing
+4. Exact pipelineFeatureId algorithm
+5. JSON round-trip validation
+6. Remaining blockers
+7. Final GO / NO-GO for Task #7
+
+Do not implement yet.
