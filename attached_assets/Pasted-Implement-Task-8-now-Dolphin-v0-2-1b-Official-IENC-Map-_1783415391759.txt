@@ -1,0 +1,652 @@
+Implement Task #8 now — Dolphin v0.2.1b Official IENC Map Integration.
+
+MODE:
+IMPLEMENTATION.
+
+Work only on:
+
+feature/v0.2.1b-official-ienc-integration
+
+Do not merge to main.
+Do not start nationwide rollout.
+Do not add routing.
+Do not add AI.
+Do not add bridge-clearance automation.
+Do not claim production navigation readiness.
+
+Task #7 is complete and validated.
+
+==================================================
+SOURCE CONTRACT
+==================================================
+
+Consume only:
+
+/nautical/navigation-marks.geojson
+/nautical/depth-areas.geojson
+/nautical/depth-contours.geojson
+/nautical/soundings.geojson
+/nautical/pipeline-manifest.public.json
+
+Never read raw .000 files in the frontend.
+Never read data/nautical/intermediate/.
+Never expose raw S-57.
+
+Task #7 validated:
+
+navigation marks: 72
+depth areas: 925
+depth contours: 918
+soundings: 2084 normalized Points
+
+SOUNDG signed distribution:
+
+above: 1612
+below: 468
+at: 4
+
+Datum:
+
+SDAT 42
+"Approximate LAT"
+VERIFIED_FROM_OFFICIAL_DOCUMENTATION
+
+VDAT 24:
+"Local Datum"
+
+NAP identity:
+UNVERIFIED
+
+==================================================
+1. PRE-FLIGHT AUDIT
+==================================================
+
+Before modifying code, verify:
+
+- current branch
+- current HEAD
+- git status
+- five public nautical files exist
+- all five are non-empty
+- public manifest parses
+- pipelineSchemaVersion === 1
+- validation.status === "PASS"
+- pipelineRunId exists
+- BASE_STYLE_GROUP exists
+- removeOverlays exists
+- current Satellite ↔ Hybrid deterministic reconciliation exists
+
+If any prerequisite fails:
+ABORT.
+
+Do not silently continue.
+
+==================================================
+2. MANIFEST LOADER
+==================================================
+
+Create a typed frontend manifest loader.
+
+Requirements:
+
+- load /nautical/pipeline-manifest.public.json
+- validate required structure
+- require pipelineSchemaVersion === 1
+- require validation.status === "PASS"
+- require pipelineRunId
+- expose getCellMeta(sourceCellId)
+
+getCellMeta must return:
+
+- cellId
+- edition
+- issueDate
+- updateApplicationDate
+- producer
+
+Unknown sourceCellId:
+
+return null
+
+Never invent metadata.
+
+Do not hardcode cell dates in UI components.
+
+==================================================
+3. TOPMAR INSPECTION BEFORE PORTRAYAL
+==================================================
+
+Before wiring TOPMAR into a visible layer:
+
+Inspect all 15 processed TOPMAR features.
+
+Report:
+
+- geometry
+- coordinates
+- sourceCellId
+- sourceStableId
+- associationRefsVerifiedInGdalOutput
+- available relationship/reference attributes
+- proximity to BOYLAT / BOYSPP / BCNSPP features
+- whether multiple features appear colocated or near-colocated
+
+Do not automatically assume independent standalone portrayal is nautically correct.
+
+Decision:
+
+A. If standalone display appears acceptably unambiguous for the pilot:
+   render with explicit prototype caveat.
+
+B. If likely detached/duplicated from parent marks:
+   keep TOPMAR in data but exclude from visible pilot layer.
+
+Document decision in:
+
+nautical-investigation/ACCEPTANCE-TEST.md
+
+==================================================
+4. TYPED IENC DATA MODEL
+==================================================
+
+Extend:
+
+artifacts/dolphin/src/modules/nautical/types.ts
+
+Define typed frontend models for:
+
+- official navigation marks
+- depth areas
+- depth contours
+- soundings
+- datum metadata
+- chartedValueRelationToDatum
+- source provenance
+- manifest metadata
+
+Do not expose raw S-57 class names as user-facing labels.
+
+Preserve:
+
+sourceCellId
+sourceStableId
+pipelineFeatureId internally
+sourceKind
+official
+provenance
+
+pipelineFeatureId:
+technical only
+never display in UI
+
+==================================================
+5. IENC SOURCE / LAYER REGISTRY
+==================================================
+
+Create:
+
+artifacts/dolphin/src/modules/nautical/iencLayers.ts
+
+Define deterministic source and layer IDs.
+
+Suggested source IDs:
+
+ienc-navigation-marks-source
+ienc-depth-areas-source
+ienc-depth-contours-source
+ienc-soundings-source
+
+Suggested layer IDs:
+
+ienc-depth-areas-fill
+ienc-depth-contours-line
+ienc-soundings-point
+ienc-navigation-marks-point
+
+Add separate label/symbol layers only when useful and zoom-constrained.
+
+Requirements:
+
+- idempotent add
+- existence guards
+- remove layer before source
+- no duplicate registration
+- restrained prototype styling
+- no claim of IHO/S-52 portrayal
+- no invented nautical color meaning
+
+==================================================
+6. PERFORMANCE-SAFE LOADING
+==================================================
+
+The public dataset is approximately:
+
+navigation marks: 65 KB
+depth areas: 5.0 MB
+depth contours: 2.9 MB
+soundings: 1.5 MB
+
+Total approximately 9.5 MB.
+
+Do not repeatedly fetch this data on every mode switch.
+
+Requirements:
+
+- fetch each dataset at most once per app session unless explicit retry after failure
+- cache successfully parsed GeoJSON in memory
+- mode switching must reuse cached data
+- no duplicate fetch loops
+- no moveend-triggered refetch
+- no viewport refetch in this pilot
+- no duplicate event listeners
+- report actual load timing where practical
+
+Do not render all sounding text labels at all zoom levels.
+
+Prefer:
+
+- soundings hidden at low zoom
+- sounding points appear only from a reasonable pilot zoom
+- sounding text labels only at a higher zoom threshold
+
+Document chosen zoom thresholds.
+
+==================================================
+7. MODE TARGETS
+==================================================
+
+Dolphin Nav:
+
+- OSM base
+- Official navigation marks ON by default
+- Official charted depths ON by default
+- Community seamarks OFF
+
+Satellite:
+
+- Esri imagery
+- Official IENC OFF
+- Community seamarks OFF
+- visually clean
+
+Hybrid:
+
+- Esri imagery
+- Official navigation marks ON by default
+- Official charted depths ON by default
+- Community seamarks OFF by default
+
+Do not silently merge official and community data.
+
+Official IENC:
+
+sourceKind: "official"
+official: true
+
+OpenSeaMap:
+
+sourceKind: "community"
+official: false
+
+==================================================
+8. PRESERVE MAP LIFECYCLE FIX
+==================================================
+
+Critical invariant:
+
+base style lifecycle
+!=
+overlay lifecycle
+
+Do not reintroduce setStyle for:
+
+Satellite ↔ Hybrid
+
+Preserve BASE_STYLE_GROUP.
+
+Target transitions:
+
+Dolphin → Satellite:
+real OSM → ESRI base swap
+
+Dolphin → Hybrid:
+real OSM → ESRI base swap
+then target overlays
+
+Satellite → Hybrid:
+same ESRI base
+NO setStyle
+apply target overlays directly
+
+Hybrid → Satellite:
+same ESRI base
+NO setStyle
+remove Hybrid overlays directly
+
+Hybrid → Dolphin:
+real ESRI → OSM base swap
+then target overlays
+
+Do not depend on style.load for same-base transitions.
+
+==================================================
+9. TARGET OVERLAY RECONCILIATION
+==================================================
+
+Improve current reconciliation toward:
+
+current overlay set
+vs
+target overlay set
+
+Remove only obsolete overlays.
+Add only missing overlays.
+Preserve shared overlays where possible.
+
+Requirements:
+
+- deterministic
+- idempotent
+- no duplicates
+- no stale overlays
+- rapid switching safe
+
+Do not rebuild the map instance.
+
+==================================================
+10. USER TOGGLES
+==================================================
+
+LayerSheet groups:
+
+- Navigation marks
+- Charted depths
+- Community seamarks
+
+Do not expose:
+
+- BCNSPP
+- BOYLAT
+- BOYSPP
+- DEPARE
+- DEPCNT
+- SOUNDG
+- TOPMAR
+
+as raw user-facing toggle names.
+
+Defaults:
+
+Dolphin:
+Navigation marks ON
+Charted depths ON
+Community seamarks OFF
+
+Satellite:
+No IENC controls shown or IENC visibly OFF
+
+Hybrid:
+Navigation marks ON
+Charted depths ON
+Community seamarks OFF
+
+User choice persistence during current app session:
+
+- turn Navigation marks OFF
+- switch mode
+- return
+- remains OFF
+
+Same for Charted depths and Community seamarks.
+
+Do not unintentionally overwrite user choice on every mode transition.
+
+==================================================
+11. DEPTH PORTRAYAL
+==================================================
+
+Use restrained prototype styling.
+
+DEPARE:
+
+- subtle fill
+- do not imply official S-52 color compliance
+- do not infer safe water
+
+DEPCNT:
+
+- restrained contour lines
+- label only when legible
+- VALDCO is charted contour value
+
+SOUNDG:
+
+relation === "above":
+- never portray as navigable depth
+- detail label: "Drying height"
+
+relation === "below":
+- charted depth relation
+- detail label: "Charted depth"
+
+relation === "at":
+- "At chart datum"
+
+Do not use:
+
+"Current depth"
+"Safe depth"
+"Guaranteed clearance"
+
+Always preserve:
+
+"Not real-time water depth"
+
+==================================================
+12. NAUTICAL OBJECT INTERACTION
+==================================================
+
+Create or reuse one detail system only:
+
+NauticalObjectSheet
+
+Do not build competing popup and sheet systems.
+
+Click/tap only official IENC vector layers.
+
+Display verified fields where available:
+
+- human-readable object type
+- official badge
+- source producer
+- source cell
+- sourceStableId when available
+- charted value when applicable
+- datum
+- edition
+- issue date
+- update application date
+
+Resolve cell dates via:
+
+getCellMeta(sourceCellId)
+
+Missing value:
+
+omit field or show "—"
+
+Never invent values.
+
+For SOUNDG:
+
+above:
+"Drying height"
+X.X m above chart datum
+
+below:
+"Charted depth"
+X.X m below Approximate LAT
+
+at:
+"At chart datum"
+0.0 m
+
+Stored signed value must remain unchanged.
+
+==================================================
+13. OFFICIAL / COMMUNITY SEPARATION
+==================================================
+
+Hard requirement:
+
+Official IENC features and OpenSeaMap community seamarks must never share:
+
+- GeoJSON source
+- MapLibre source
+- layer
+- provenance identity
+
+Community seamarks remain separately toggleable.
+
+NauticalObjectSheet only handles official IENC vector objects in this phase.
+
+==================================================
+14. ERROR BEHAVIOR
+==================================================
+
+Handle:
+
+- manifest fetch failure
+- manifest invalid JSON
+- schema version mismatch
+- validation.status not PASS
+- GeoJSON fetch failure
+- malformed GeoJSON
+- empty dataset
+
+Requirements:
+
+- do not crash whole app
+- do not show fabricated fallback nautical data
+- map base remains usable
+- affected IENC overlay unavailable
+- clear development console diagnostic
+
+Do not silently pretend successful IENC load.
+
+==================================================
+15. TYPECHECK AND BUILD
+==================================================
+
+Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+
+and:
+
+pnpm --filter @workspace/dolphin build
+
+Must pass.
+
+These do not replace manual testing.
+
+==================================================
+16. MANUAL IPHONE ACCEPTANCE CHECKLIST
+==================================================
+
+Create/update:
+
+nautical-investigation/ACCEPTANCE-TEST.md
+
+Do not mark manual tests PASS unless actually manually observed.
+
+Prepare checklist:
+
+A. Dolphin Nav
+- official marks visible
+- charted depth areas visible
+- contours visible where applicable
+- map remains responsive
+
+B. Satellite
+- clean imagery
+- no IENC
+- no community seamarks
+
+C. Hybrid
+- official marks visible
+- official charted depths visible
+- Community seamarks OFF by default
+
+D. Transition regression
+- Satellite → Hybrid
+- Hybrid → Satellite → Hybrid
+- Dolphin → Hybrid
+- Dolphin → Satellite → Hybrid
+- 20 rapid mode cycles
+
+Expected:
+- no black map
+- no missing overlays
+- no duplicates
+- no stale layers
+
+E. Toggle persistence
+- nav marks OFF → switch → return → remains OFF
+- depths OFF → switch → return → remains OFF
+- community ON/OFF preserved
+
+F. Object interaction
+- tap official navigation mark
+- tap depth area
+- tap depth contour
+- tap above-datum sounding
+- tap below-datum sounding if geographically available
+
+G. Safety wording
+- no "Current depth"
+- no "Safe depth"
+- no guaranteed clearance
+- "Not real-time water depth" visible
+
+H. Regressions
+- GPS
+- follow mode
+- Settings
+- theme
+- vessel profile
+- units
+- search
+
+==================================================
+17. FINAL REPORT
+==================================================
+
+Return:
+
+1. Pre-flight audit
+2. Files added
+3. Files modified
+4. Manifest loader result
+5. TOPMAR inspection result and rendering decision
+6. Data loading architecture
+7. Actual fetch/cache behavior
+8. Chosen zoom thresholds
+9. IENC source/layer registry
+10. Overlay reconciliation changes
+11. Mode behavior
+12. Toggle behavior
+13. Object interaction
+14. Signed sounding display behavior
+15. Official/community separation
+16. Error handling
+17. TypeScript result
+18. Build result
+19. Prepared manual iPhone checklist
+20. Tests actually executed vs not executed
+21. Any deviations
+22. New blockers
+23. Explicit recommendation for manual acceptance
+
+Do not start Task #9.
+Do not merge to main.
