@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
+import type { MapGeoJSONFeature } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { MapMode, MapViewRef, MapCenterOptions } from '../modules/map/types';
 import { MAP_STYLES } from '../modules/map/styles';
@@ -8,28 +9,45 @@ import {
   getOverlaysForMode,
   applyOverlays,
   removeOverlays,
+  applyLayerGroupVisibility,
 } from '../modules/map/overlayManager';
+import { IENC_CLICKABLE_LAYER_IDS } from '../modules/nautical/iencLayers';
 
 export type { MapMode, MapViewRef };
 
 interface MapViewProps {
   mode: MapMode;
+  /**
+   * Per-group layer visibility state (groupId → visible).
+   * Applied via setLayoutProperty after overlays are added.
+   * Groups with no entry in this map default to visible.
+   */
+  layerGroupVisibility: Record<string, boolean>;
   onMapLoad?: () => void;
   /** Called when the user drags or rotates the map — used to exit tracking mode */
   onUserInteraction?: () => void;
+  /**
+   * Called when the user taps an official IENC feature (nav mark or depth feature).
+   * Receives the topmost MapLibre feature at the tap point.
+   */
+  onFeatureClick?: (feature: MapGeoJSONFeature) => void;
 }
 
 export const MapView = forwardRef<MapViewRef, MapViewProps>(
-  ({ mode, onMapLoad, onUserInteraction }, ref) => {
+  ({ mode, layerGroupVisibility, onMapLoad, onUserInteraction, onFeatureClick }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const modeRef = useRef<MapMode>(mode);
     const prevModeRef = useRef<MapMode>(mode);
     const onUserInteractionRef = useRef(onUserInteraction);
+    const onFeatureClickRef = useRef(onFeatureClick);
+    const layerGroupVisibilityRef = useRef(layerGroupVisibility);
     const [webglFailed, setWebglFailed] = useState(false);
 
     useEffect(() => { modeRef.current = mode; }, [mode]);
     useEffect(() => { onUserInteractionRef.current = onUserInteraction; }, [onUserInteraction]);
+    useEffect(() => { onFeatureClickRef.current = onFeatureClick; }, [onFeatureClick]);
+    useEffect(() => { layerGroupVisibilityRef.current = layerGroupVisibility; }, [layerGroupVisibility]);
 
     useImperativeHandle(ref, () => ({
       getMap: () => map.current,
@@ -124,7 +142,9 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
 
       // Initial overlays after first style load
       initialMap.on('load', () => {
-        applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
+        const overlays = getOverlaysForMode(modeRef.current);
+        applyOverlays(initialMap, overlays);
+        applyLayerGroupVisibility(initialMap, overlays, layerGroupVisibilityRef.current);
         onMapLoad?.();
       });
 
@@ -136,7 +156,9 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
       // mode-change effect below.
       const handleStyleLoad = () => {
         if (!map.current) return;
-        applyOverlays(initialMap, getOverlaysForMode(modeRef.current));
+        const overlays = getOverlaysForMode(modeRef.current);
+        applyOverlays(initialMap, overlays);
+        applyLayerGroupVisibility(initialMap, overlays, layerGroupVisibilityRef.current);
       };
       initialMap.on('style.load', handleStyleLoad);
 
@@ -147,10 +169,28 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
       initialMap.on('dragstart', handleUserInteraction);
       initialMap.on('rotatestart', handleUserInteraction);
 
+      // Global click listener for official IENC features.
+      // Queries only layers that currently exist in the map (guards against
+      // mode switches where IENC layers may be absent).
+      const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+        if (!map.current || !onFeatureClickRef.current) return;
+        const m = map.current;
+        const clickable = IENC_CLICKABLE_LAYER_IDS.filter(
+          (id) => m.getLayer(id) !== undefined
+        );
+        if (clickable.length === 0) return;
+        const features = m.queryRenderedFeatures(e.point, { layers: clickable });
+        if (features.length > 0) {
+          onFeatureClickRef.current(features[0]);
+        }
+      };
+      initialMap.on('click', handleMapClick);
+
       return () => {
         initialMap.off('style.load', handleStyleLoad);
         initialMap.off('dragstart', handleUserInteraction);
         initialMap.off('rotatestart', handleUserInteraction);
+        initialMap.off('click', handleMapClick);
         // Null the ref BEFORE remove() so that any in-flight events queued
         // during removal don't attempt to apply overlays to a dead instance.
         map.current = null;
@@ -164,13 +204,14 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
      * Base-style lifecycle (setStyle required):
      *   Dolphin ↔ Satellite  OSM ↔ ESRI — full style reload
      *   Dolphin ↔ Hybrid     OSM ↔ ESRI — full style reload
-     *   → setStyle fires style.load, which calls applyOverlays for the new mode.
+     *   → setStyle fires style.load, which calls applyOverlays + applyLayerGroupVisibility.
      *
      * Overlay-only reconciliation (setStyle must NOT be called):
      *   Satellite ↔ Hybrid   ESRI ↔ ESRI — identical base content
      *   → setStyle produces a zero-diff; MapLibre emits no lifecycle events
      *     (neither styledata nor style.load fires), so overlays are never applied.
-     *   → Instead: remove previous-mode overlays, add next-mode overlays directly.
+     *   → Instead: remove previous-mode overlays, add next-mode overlays directly,
+     *     then apply group visibility.
      */
     useEffect(() => {
       if (!map.current) return;
@@ -179,16 +220,32 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
       const nextMode = mode;
 
       if (BASE_STYLE_GROUP[prevMode] !== BASE_STYLE_GROUP[nextMode]) {
-        // Base tiles change — swap style; handleStyleLoad applies the new overlays.
+        // Base tiles change — swap style; handleStyleLoad applies new overlays + visibility.
         m.setStyle(MAP_STYLES[nextMode]);
       } else {
         // Same base tiles — reconcile overlays directly without touching the style.
         removeOverlays(m, getOverlaysForMode(prevMode));
-        applyOverlays(m, getOverlaysForMode(nextMode));
+        const nextOverlays = getOverlaysForMode(nextMode);
+        applyOverlays(m, nextOverlays);
+        applyLayerGroupVisibility(m, nextOverlays, layerGroupVisibilityRef.current);
       }
 
       prevModeRef.current = nextMode;
     }, [mode]);
+
+    /**
+     * Visibility-only update: user toggles a layer group without changing mode.
+     * Applies setLayoutProperty for all grouped layers in the current mode.
+     * Safe to call when layers may not yet exist — applyLayerGroupVisibility guards.
+     */
+    useEffect(() => {
+      if (!map.current) return;
+      applyLayerGroupVisibility(
+        map.current,
+        getOverlaysForMode(modeRef.current),
+        layerGroupVisibility
+      );
+    }, [layerGroupVisibility]);
 
     if (webglFailed) {
       return (

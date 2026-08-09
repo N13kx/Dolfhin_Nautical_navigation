@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
+import type { MapGeoJSONFeature } from 'maplibre-gl';
 import { useGeolocation } from '../modules/navigation/useGeolocation';
 import { metersPerSecondToKnots } from '../modules/navigation/gpsUtils';
 import { createBoatMarkerElement, updateBoatHeading } from '../modules/vessel/boatMarker';
@@ -11,8 +12,10 @@ import { LocateButton } from '../components/LocateButton';
 import { LayerSheet } from '../components/LayerSheet';
 import { Toast } from '../components/Toast';
 import { SettingsScreen } from '../components/settings/SettingsScreen';
+import { NauticalObjectSheet } from '../components/NauticalObjectSheet';
 import { updateDiagnostics } from '../diagnostics';
 import { useSettings } from '../modules/settings/SettingsContext';
+import { loadManifest } from '../modules/nautical/manifestLoader';
 import type { MapMode, MapViewRef, TrackingMode } from '../modules/map/types';
 import type { SearchResult } from '../services/search/types';
 
@@ -25,6 +28,21 @@ function isValidHeading(h: number | null): h is number {
 function isValidSpeed(s: number | null): s is number {
   return s !== null && Number.isFinite(s) && s >= 0;
 }
+
+/**
+ * Layer group visibility state.
+ * groupId → whether the layer group is visible on the map.
+ *
+ * Defaults:
+ *   nav-marks          ON  — IENC navigation marks (Dolphin + Hybrid)
+ *   charted-depths     ON  — IENC depth areas, contours, soundings (Dolphin + Hybrid)
+ *   community-seamarks OFF — OpenSeaMap raster (Hybrid only, user opt-in)
+ */
+const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
+  'nav-marks': true,
+  'charted-depths': true,
+  'community-seamarks': false,
+};
 
 export function DolphinApp() {
   const { settings } = useSettings();
@@ -51,12 +69,29 @@ export function DolphinApp() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [hasInitialFix, setHasInitialFix] = useState(false);
 
+  /** Per-group map layer visibility. Persists across mode switches. */
+  const [layerGroupVisibility, setLayerGroupVisibility] = useState<Record<string, boolean>>(
+    DEFAULT_LAYER_VISIBILITY
+  );
+
+  /** Feature tapped on the map — opens NauticalObjectSheet. */
+  const [selectedFeature, setSelectedFeature] = useState<MapGeoJSONFeature | null>(null);
+
   const { position, quality, error, isTracking, start: startGps, stop: stopGps } = useGeolocation();
 
   // Ref mirrors trackingMode state so GPS effects always read the latest value
   // without being stale between React render cycles (prevents snap-back race).
   const trackingModeRef = useRef<TrackingMode>(trackingMode);
   useEffect(() => { trackingModeRef.current = trackingMode; }, [trackingMode]);
+
+  // Load IENC pipeline manifest once at startup.
+  // Aborts with a console error if validation.status !== "PASS" or fetch fails.
+  // NauticalObjectSheet uses getCellMeta() (module-level cache) for date resolution.
+  useEffect(() => {
+    loadManifest().catch((err) => {
+      console.error('[DolphinApp] IENC manifest load failed:', err);
+    });
+  }, []);
 
   // Keep diagnostics current — no coordinates stored
   useEffect(() => {
@@ -239,6 +274,16 @@ export function DolphinApp() {
     setToastMsg(result.name);
   }, []);
 
+  // IENC feature tap → open detail sheet
+  const handleFeatureClick = useCallback((feature: MapGeoJSONFeature) => {
+    setSelectedFeature(feature);
+  }, []);
+
+  // Layer group toggle from LayerSheet
+  const handleToggleGroup = useCallback((groupId: string, visible: boolean) => {
+    setLayerGroupVisibility((prev) => ({ ...prev, [groupId]: visible }));
+  }, []);
+
   // Derive display values — guard against non-finite sensor values
   const sog = isValidSpeed(position?.speed ?? null)
     ? metersPerSecondToKnots(position!.speed!)
@@ -250,7 +295,9 @@ export function DolphinApp() {
       <MapView
         ref={mapRef}
         mode={mapMode}
+        layerGroupVisibility={layerGroupVisibility}
         onUserInteraction={handleMapUserInteraction}
+        onFeatureClick={handleFeatureClick}
       />
 
       <TopBar
@@ -289,6 +336,13 @@ export function DolphinApp() {
           setIsLayerSheetOpen(false);
         }}
         onClose={() => setIsLayerSheetOpen(false)}
+        layerGroupVisibility={layerGroupVisibility}
+        onToggleGroup={handleToggleGroup}
+      />
+
+      <NauticalObjectSheet
+        feature={selectedFeature}
+        onClose={() => setSelectedFeature(null)}
       />
 
       {isSettingsOpen && (
