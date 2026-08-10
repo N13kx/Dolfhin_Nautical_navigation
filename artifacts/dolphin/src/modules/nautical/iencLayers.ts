@@ -19,11 +19,62 @@
  * cannot be verified from the decoded data, standalone TOPMAR rendering is
  * DEFERRED per the decision rule in the Task #8 brief.
  *
- * Implementation: the nav-marks layer applies a MapLibre filter that
+ * Implementation: the nav-marks layers apply a MapLibre filter that
  * excludes dolphinKind === "topmark". TOPMARs remain in the GeoJSON
  * file and pass validation — only map display is suppressed.
  *
  * This decision is documented in nautical-investigation/ACCEPTANCE-TEST.md.
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * ── SOUNDING LABEL DENSITY STRATEGY (DOL-011, 2026-08-10) ───────────
+ * Progressive density is driven by text-padding interpolation across zoom.
+ * Higher text-padding at low zoom creates a larger exclusion zone around
+ * each placed symbol, allowing MapLibre's collision engine to admit far
+ * fewer labels. As zoom increases, text-padding shrinks and more labels
+ * fit without colliding.
+ *
+ * Only chartedValueRelationToDatum === "below" features are labeled.
+ * "above" (drying heights) and "at" features are never shown as depth labels.
+ *
+ * symbol-sort-key ascending by |depth|: shallower soundings sort earlier and
+ * win collision priority at sparse zoom levels — prioritising safety-critical
+ * shallow depth information over deeper soundings.
+ *
+ * Zoom thresholds and density targets (468 eligible below-datum soundings):
+ *   zoom 10 — text-padding 80, text-size  9 →  sparse   (~7–15% visible)
+ *   zoom 12 — text-padding 30, text-size 10 →  moderate (~20–35% visible)
+ *   zoom 14 — text-padding  8, text-size 11 →  dense    (~55–75% visible)
+ *   zoom 16 — text-padding  2, text-size 12 →  near-full (~85–95% visible)
+ *
+ * Actual visible fraction varies with viewport size and local cluster density.
+ * Results are deterministic: same viewport + zoom → same label set.
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * ── NAVIGATION MARK PORTRAYAL (DOL-011, 2026-08-10) ─────────────────
+ * Properties accessed from sourceProperties (real nested object in GeoJSON,
+ * accessible via MapLibre ['get', 'key', ['get', 'sourceProperties']]):
+ *
+ *   CATLAM — lateral category for BOYLAT features:
+ *     2 = port-hand, 3 = starboard-hand, 4 = preferred-channel-to-port
+ *     Source: verified S-57 CATLAM attribute from Rijkswaterstaat IENC.
+ *     Used to colour-code lateral buoys without inventing spatial inference.
+ *
+ *   COLOUR — primary light colour code (array, first element used):
+ *     "1"=white, "3"=red, "4"=green, "6"=yellow.
+ *     Source: verified S-57 COLOUR attribute from Rijkswaterstaat IENC.
+ *     Used to represent the emitted light colour on the map dot.
+ *
+ *   OBJNAM — mark name string (e.g. "NV 8", "SM-16").
+ *     Source: verified S-57 OBJNAM attribute. Absent on some features;
+ *     label layer filters to present-and-non-empty only.
+ *
+ * Attributes deliberately NOT interpreted:
+ *   LITCHR, SIGPER, SIGGRP — light characteristics. Present on LIGHTS but
+ *     not visualised to avoid implying specific temporal patterns.
+ *   BCNSHP, BOYSHP — physical shape codes. Not used; shape portrayal via
+ *     distinct layer instead of per-feature geometry.
+ *   COLPAT — colour pattern. Not used; only primary COLOUR[0] is accessed.
+ *   CATSPM — special purpose category. Not used; buoy-special shown neutral.
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -31,19 +82,22 @@ import type { OverlaySpec } from '../map/overlayManager';
 
 /** Layer/source IDs used by IENC overlays — exported for click wiring. */
 export const IENC_LAYER_IDS = {
-  navMarksPoint: 'ienc-nav-marks-point',
-  depthAreasFill: 'ienc-depth-areas-fill',
+  navMarksHalo:    'ienc-nav-marks-halo',    // lights-only outer glow ring (visual only)
+  navMarksPoint:   'ienc-nav-marks-point',   // main mark circle + hit target
+  navMarksLabel:   'ienc-nav-marks-label',   // OBJNAM text labels
+  depthAreasFill:  'ienc-depth-areas-fill',
   depthContoursLine: 'ienc-depth-contours-line',
-  soundingsPoint: 'ienc-soundings-point',
-  soundingsLabel: 'ienc-soundings-label',
+  soundingsPoint:  'ienc-soundings-point',   // transparent tap/click hit target
+  soundingsLabel:  'ienc-soundings-label',   // progressive charted-depth text
 } as const;
 
 export type IencLayerId = (typeof IENC_LAYER_IDS)[keyof typeof IENC_LAYER_IDS];
 
 /**
  * MapLibre layer IDs that respond to tap/click for feature inspection.
- * TOPMAR excluded (deferred rendering). Soundings label layer excluded
- * (the point layer captures the tap area).
+ * TOPMAR excluded (deferred rendering).
+ * navMarksHalo and navMarksLabel excluded (navMarksPoint captures tap area).
+ * soundingsLabel excluded (soundingsPoint captures tap area).
  */
 export const IENC_CLICKABLE_LAYER_IDS: string[] = [
   IENC_LAYER_IDS.navMarksPoint,
@@ -62,10 +116,78 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
   const b = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
   return [
-    // ── Navigation marks ─────────────────────────────────────────────
-    // BCNSPP, BOYLAT, BOYSPP, LIGHTS — TOPMAR excluded (deferred rendering; see header).
+    // ── Navigation marks — light glow halo ──────────────────────────
+    //
+    // Rendered behind the main mark circle. Applies only to LIGHTS features.
+    // The soft translucent ring suggests the visual spread of a light source
+    // without implying any specific light characteristic.
+    // Verified attribute used: dolphinKind === 'light' (derived from OBJL=75, LIGHTS).
     {
       sourceId: 'ienc-nav-marks-source',
+      source: {
+        type: 'geojson' as const,
+        data: `${b}nautical/navigation-marks.geojson`,
+      },
+      layerId: IENC_LAYER_IDS.navMarksHalo,
+      layer: {
+        id: IENC_LAYER_IDS.navMarksHalo,
+        type: 'circle' as const,
+        source: 'ienc-nav-marks-source',
+        minzoom: 9,
+        filter: ['==', ['get', 'dolphinKind'], 'light'],
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            9,  12,
+            12, 18,
+            16, 26,
+          ],
+          // Warm cream glow — not keyed to any colour attribute.
+          // COLOUR-based light colours appear on the smaller inner circle.
+          'circle-color': '#fffbe0',
+          'circle-opacity': 0.18,
+          'circle-stroke-width': 0,
+        },
+      },
+      groupId: 'nav-marks',
+    },
+
+    // ── Navigation marks — main circle ──────────────────────────────
+    //
+    // BCNSPP, BOYLAT, BOYSPP, LIGHTS — TOPMAR excluded (deferred; see header).
+    //
+    // Colour assignment:
+    //
+    //   buoy-lateral (BOYLAT):
+    //     Keyed to verified CATLAM attribute (S-57 lateral category code):
+    //       CATLAM=2  port-hand           → red   (#cc3333)
+    //       CATLAM=3  starboard-hand      → green (#339944)
+    //       CATLAM=4  preferred-channel   → violet (#9933aa)
+    //       other/absent                  → amber  (#e07820)
+    //     CATLAM is an official Rijkswaterstaat attribute. Its use here
+    //     reflects the marked lateral category, not an invented colour rule.
+    //     No claim of IHO S-52 colour compliance is made.
+    //
+    //   buoy-special (BOYSPP):
+    //     Neutral yellow — all 5 BOYSPP features have COLOUR=6 (yellow)
+    //     in the source data. Yellow is the internationally standard
+    //     colour for special-purpose marks.
+    //
+    //   beacon-special (BCNSPP):
+    //     Dark slate — both BCNSPP features have COLOUR=2 (black) in
+    //     the source data.
+    //
+    //   light (LIGHTS):
+    //     Keyed to verified COLOUR attribute (primary element COLOUR[0]):
+    //       "1" white  → pale cream (#f4f4e8)
+    //       "3" red    → red       (#ee4444)
+    //       "4" green  → green     (#44cc44)
+    //       "6" yellow → yellow    (#ffdd44)
+    //       other      → teal      (#44cccc)
+    //     COLOUR[0] is the S-57 primary colour code. The map colour
+    //     represents the physical light colour, not a characteristic pattern.
+    {
+      sourceId: 'ienc-nav-marks-source', // source already registered above
       source: {
         type: 'geojson' as const,
         data: `${b}nautical/navigation-marks.geojson`,
@@ -86,16 +208,106 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
             16, 10,
           ],
           'circle-color': [
-            'match', ['get', 'dolphinKind'],
-            'buoy-lateral', '#e8a040',
-            'buoy-special', '#e8e040',
-            'beacon-special', '#e0c840',
-            'light', '#44e4c2',
-            /* default */ '#aaaaaa',
+            'case',
+
+            // ── Lateral buoys: CATLAM-based colour ────────────────
+            ['==', ['get', 'dolphinKind'], 'buoy-lateral'],
+            [
+              'match',
+              // CATLAM is a numeric S-57 attribute stored in sourceProperties.
+              // Convert to string for match expression compatibility.
+              ['to-string', ['get', 'CATLAM', ['get', 'sourceProperties']]],
+              '2', '#cc3333',  // port-hand
+              '3', '#339944',  // starboard-hand
+              '4', '#9933aa',  // preferred-channel
+              '#e07820',       // unknown / absent CATLAM
+            ],
+
+            // ── Special buoys: yellow ──────────────────────────────
+            ['==', ['get', 'dolphinKind'], 'buoy-special'],
+            '#e8e040',
+
+            // ── Special beacons: dark slate ────────────────────────
+            ['==', ['get', 'dolphinKind'], 'beacon-special'],
+            '#445566',
+
+            // ── Lights: primary COLOUR[0] code ─────────────────────
+            ['==', ['get', 'dolphinKind'], 'light'],
+            [
+              'match',
+              // COLOUR is stored as an array of string-encoded S-57 codes.
+              // ['at', 0, ...] retrieves the primary (first) colour element.
+              ['coalesce',
+                ['at', 0, ['get', 'COLOUR', ['get', 'sourceProperties']]],
+                '1',
+              ],
+              '1', '#f4f4e8',  // white
+              '3', '#ee4444',  // red
+              '4', '#44cc44',  // green
+              '6', '#ffdd44',  // yellow
+              '#44cccc',       // other
+            ],
+
+            /* default — should not occur for non-TOPMAR features */
+            '#aaaaaa',
           ],
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': 1.5,
           'circle-opacity': 0.9,
+        },
+      },
+      groupId: 'nav-marks',
+    },
+
+    // ── Navigation marks — name labels ──────────────────────────────
+    //
+    // Shows the verified OBJNAM attribute (mark name, e.g. "NV 8", "SM-16")
+    // for marks that carry it in the source data.
+    //
+    // Excluded: TOPMAR (deferred), LIGHTS (38 overlapping labels is too dense;
+    // light characteristics are not rendered in this task).
+    // Excluded: features where OBJNAM is absent or empty in sourceProperties.
+    //
+    // Verified attribute used: OBJNAM from sourceProperties.
+    {
+      sourceId: 'ienc-nav-marks-source', // source already registered above
+      source: {
+        type: 'geojson' as const,
+        data: `${b}nautical/navigation-marks.geojson`,
+      },
+      layerId: IENC_LAYER_IDS.navMarksLabel,
+      layer: {
+        id: IENC_LAYER_IDS.navMarksLabel,
+        type: 'symbol' as const,
+        source: 'ienc-nav-marks-source',
+        minzoom: 11,
+        filter: [
+          'all',
+          ['!=', ['get', 'dolphinKind'], 'topmark'],
+          ['!=', ['get', 'dolphinKind'], 'light'],
+          // Only show label when OBJNAM is present and non-empty.
+          [
+            '!=',
+            ['coalesce', ['get', 'OBJNAM', ['get', 'sourceProperties']], ''],
+            '',
+          ],
+        ],
+        layout: {
+          'text-field': [
+            'coalesce',
+            ['get', 'OBJNAM', ['get', 'sourceProperties']],
+            '',
+          ],
+          'text-size': 10,
+          'text-anchor': 'top' as const,
+          'text-offset': [0, 0.9],
+          'text-allow-overlap': false,
+          'text-optional': true,
+        },
+        paint: {
+          'text-color': '#e8f4ff',
+          'text-halo-color': '#0a1020',
+          'text-halo-width': 1.2,
         },
       },
       groupId: 'nav-marks',
@@ -204,23 +416,37 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     //   Only relation === "below" features are portrayed as depth labels.
     //   chartedValueMetres is negative for below-datum soundings (e.g. -2.9).
     //   The label shows the positive magnitude: abs(chartedValueMetres) → "2.9".
-    //   The stored signed value is never mutated.
+    //   The stored signed value is never mutated. No "*" suffix.
     //
     //   relation === "above" (drying heights) and "at" are NOT shown as depth
     //   labels. They remain in the data and are accessible via tap → sheet.
     //   They must never be implied to be navigable or safe depth.
     //
-    // PROGRESSIVE DENSITY (zoom thresholds, documented):
-    //   zoom 10 — minzoom start; text-size 9px; MapLibre collision keeps only
-    //             well-separated labels → very sparse, representative soundings
-    //   zoom 12 — text-size 10px; more labels fit without colliding
-    //   zoom 14 — text-size 11px; dense — normal boating zoom
-    //   zoom 16 — text-size 12px; high-detail close zoom
+    // PROGRESSIVE DENSITY — text-padding interpolation (deterministic):
     //
-    // MapLibre symbol collision (text-allow-overlap: false) is the primary
-    // density control. Smaller text at low zoom means fewer labels fit in the
-    // viewport without overlapping — no random sampling, deterministic output.
-    // The same viewport + zoom always produces the same label set.
+    //   text-padding defines the minimum pixel clearance between any two
+    //   placed symbols. MapLibre's collision engine rejects any symbol that
+    //   would land within this exclusion zone of an already-placed one.
+    //   Increasing text-padding at lower zoom creates a larger exclusion zone
+    //   so far fewer labels are admitted — no random sampling, fully
+    //   deterministic (same viewport + zoom → same label set every time).
+    //   As the user zooms in, text-padding shrinks and progressively more
+    //   labels clear the collision check and appear.
+    //
+    //   symbol-sort-key ascending by |chartedValueMetres|:
+    //   Shallower soundings (smaller absolute value) sort first and win
+    //   collision priority at sparse zoom levels. This ensures safety-critical
+    //   shallow depth information appears before deeper soundings.
+    //
+    // Zoom thresholds and density targets (468 eligible below-datum soundings):
+    //   zoom 10 — padding 80px, size  9px →  sparse    (~7–15% visible)
+    //   zoom 12 — padding 30px, size 10px →  moderate  (~20–35% visible)
+    //   zoom 14 — padding  8px, size 11px →  dense     (~55–75% visible)
+    //   zoom 16 — padding  2px, size 12px →  near-full (~85–95% visible)
+    //
+    // text-size also increases with zoom (9→12px), which amplifies the density
+    // effect: larger glyphs occupy more space and further reduce crowding at
+    // lower zoom levels.
     {
       sourceId: 'ienc-soundings-source', // source already registered above
       source: {
@@ -244,22 +470,33 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
             'to-string',
             ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
           ],
-          // Progressive text size drives collision-based density.
-          // Smaller text → fewer labels fit without overlapping → sparser at low zoom.
+          // Progressive text size: amplifies the density effect by increasing
+          // glyph footprint at lower zoom in addition to text-padding.
           'text-size': [
             'interpolate', ['linear'], ['zoom'],
-            10, 9,
+            10,  9,
             12, 10,
             14, 11,
             16, 12,
           ],
+          // PRIMARY density control: shrinking exclusion zone as zoom increases.
+          'text-padding': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 80,   // wide exclusion → very sparse
+            12, 30,   // moderate exclusion
+            14,  8,   // tight exclusion → dense
+            16,  2,   // minimal exclusion → near-full
+          ],
           'text-anchor': 'center' as const,
-          // Collision off: MapLibre places as many non-overlapping labels as possible.
-          // This is deterministic — same viewport + zoom → same label set.
+          // Collision: never force-place; a label is skipped rather than
+          // overlapping an already-placed label or other symbol.
           'text-allow-overlap': false,
           'text-ignore-placement': false,
-          // Allow label to be skipped if it would overlap (rather than force-placing).
           'text-optional': true,
+          // Sort ascending by depth magnitude so shallower soundings (smallest
+          // abs value) win collision priority at sparse zoom levels.
+          // Safety rationale: shallow depth is the critical hazard information.
+          'symbol-sort-key': ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
         },
         paint: {
           'text-color': '#c8e8f8',
