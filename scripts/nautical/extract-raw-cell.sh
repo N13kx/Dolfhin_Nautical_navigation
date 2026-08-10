@@ -2,6 +2,7 @@
 # extract-raw-cell.sh — extract 8 S-57 feature classes for a SINGLE cell using GDAL 3.2.2.
 # Called by build.sh for DIRTY cells only.
 # Usage: bash extract-raw-cell.sh <rootDir> <cellId> <filename> <sha256> <gdalBin>
+# filename may be a relative path below data/nautical/chart-source/.
 #
 # Exact reader conditions: SPLIT_MULTIPOINT=NO, ADD_SOUNDG_DEPTH=NO,
 # LNAM_REFS=YES, UPDATES=APPLY.
@@ -26,9 +27,16 @@ OPEN_OPTS=(
   "-oo" "UPDATES=APPLY"
 )
 
+# FILENAME may contain nested organisational folders such as Zeeland/<cell>.000.
+# Those folder names have no nautical semantics; they only locate the source bytes.
 SRC="$ASSETS_DIR/$FILENAME"
 OUT_DIR="$INTERMEDIATE_DIR/$CELL_ID"
 mkdir -p "$OUT_DIR"
+
+if [ ! -e "$SRC" ]; then
+  echo "ERROR: Source file not found: $SRC" >&2
+  exit 1
+fi
 
 echo ""
 echo "--- Extracting cell: $CELL_ID ---"
