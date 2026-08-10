@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * discover-cells.cjs — auto-discover IENC source cells from chart-source/.
+ * discover-cells.cjs — auto-discover IENC source cells recursively from chart-source/.
  *
- * For each *.000 file found:
- *   - derives cellId from filename (pre-underscore or pre-dot segment)
+ * Source folders are ORGANISATIONAL ONLY. Their names (for example Zeeland,
+ * Nederland, Friesland) never become nautical metadata and are never used to
+ * infer cell identity, datum, producer, coverage, or safety semantics.
+ *
+ * For each *.000 file found anywhere below chart-source/:
+ *   - derives candidate cellId from the SOURCE FILE BASENAME (pre-underscore or pre-dot segment)
  *   - computes SHA-256 of the source file
  *   - checks intermediate cache (intermediate/<cellId>/metadata.json + 8 class files)
  *   - checks full cell output cache (cells/<cellId>/cell-manifest.json + 4 output files)
  *   - verifies filename-derived cellId against DSID_DSNM from metadata (if available)
+ *   - hard-fails duplicate/ambiguous cell IDs before processing
  *
  * Cache statuses:
  *   FULL_PASS        — cell-manifest.json PASS + SHA and cache-schema match
  *                      + all 4 output files present
- *                      → safe to skip ALL processing stages
+ *                      → safe to skip expensive reprocessing
  *   INTERMEDIATE_HIT — intermediate/<cellId>/ complete + SHA match, but no PASS cell output
  *                      → safe to skip GDAL extraction; run normalize + validate
  *   DIRTY            — no usable cache; full extraction required (GDAL needed)
@@ -35,10 +40,35 @@ function sha256File(filePath) {
 }
 
 function deriveCellIdFromFilename(filename) {
-  // IHO S-57 IENC naming: <CellId>_<timestamp>.000 or <CellId>.000
+  // Candidate only. Official DSID_DSNM remains the verification source when available.
   const base = path.basename(filename, '.000');
   const underscoreIdx = base.indexOf('_');
   return underscoreIdx !== -1 ? base.slice(0, underscoreIdx) : base;
+}
+
+function findSourceFilesRecursive(chartSourceDir) {
+  const found = [];
+
+  function walk(currentDir) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      // Do not traverse directory symlinks. File symlinks are allowed because existing
+      // Replit provisioning uses them; the SHA is calculated from the resolved bytes.
+      if ((entry.isFile() || entry.isSymbolicLink()) && entry.name.toLowerCase().endsWith('.000')) {
+        found.push(path.relative(chartSourceDir, fullPath));
+      }
+    }
+  }
+
+  walk(chartSourceDir);
+  return found.sort((a, b) => a.localeCompare(b));
 }
 
 function discoverCells(rootDir) {
@@ -50,12 +80,28 @@ function discoverCells(rootDir) {
     throw new Error(`chart-source directory not found: ${chartSourceDir}`);
   }
 
-  const files = fs.readdirSync(chartSourceDir)
-    .filter(f => f.toLowerCase().endsWith('.000'))
-    .sort();
+  const files = findSourceFilesRecursive(chartSourceDir);
 
   if (files.length === 0) {
-    throw new Error(`No *.000 files found in ${chartSourceDir}`);
+    throw new Error(`No *.000 files found recursively in ${chartSourceDir}`);
+  }
+
+  // Duplicate cell IDs are unsafe: never choose one source silently based on folder or sort order.
+  const byCandidateCellId = new Map();
+  for (const relativePath of files) {
+    const cellId = deriveCellIdFromFilename(path.basename(relativePath));
+    const existing = byCandidateCellId.get(cellId) || [];
+    existing.push(relativePath);
+    byCandidateCellId.set(cellId, existing);
+  }
+  const duplicates = [...byCandidateCellId.entries()].filter(([, paths]) => paths.length > 1);
+  if (duplicates.length > 0) {
+    const detail = duplicates
+      .map(([cellId, paths]) => `${cellId}: ${paths.join(', ')}`)
+      .join('\n  ');
+    throw new Error(
+      `Duplicate/ambiguous IENC cellId(s) discovered. Keep exactly one intended source file per cell.\n  ${detail}`
+    );
   }
 
   const cells = [];
@@ -63,11 +109,15 @@ function discoverCells(rootDir) {
   for (const filename of files) {
     const sourcePath = path.join(chartSourceDir, filename);
 
-    // Resolve symlinks to compute SHA of the actual file content
+    // Resolve symlinks to compute SHA of the actual source bytes.
     const realPath = fs.realpathSync(sourcePath);
 
-    // cellId from filename
-    const cellId = deriveCellIdFromFilename(filename);
+    // Candidate cellId from the file BASENAME; parent folders never influence identity.
+    const cellId = deriveCellIdFromFilename(path.basename(filename));
+
+    // Organisational source group only. Never treated as nautical truth.
+    const relativeDir = path.dirname(filename);
+    const sourceGroup = relativeDir === '.' ? null : relativeDir.split(path.sep)[0];
 
     // SHA-256 of source
     const sha256 = sha256File(realPath);
@@ -75,9 +125,9 @@ function discoverCells(rootDir) {
     // ── Intermediate cache check ─────────────────────────────────────
     const intDir    = path.join(intermediateDir, cellId);
     const metaPath  = path.join(intDir, 'metadata.json');
-    let metadataCached      = false;
+    let metadataCached       = false;
     let intermediateComplete = false;
-    let metadata            = null;
+    let metadata             = null;
 
     if (fs.existsSync(metaPath)) {
       try {
@@ -94,9 +144,9 @@ function discoverCells(rootDir) {
     }
 
     // ── Full cell-output cache check ─────────────────────────────────
-    const cellDir         = path.join(cellsDir, cellId);
+    const cellDir          = path.join(cellsDir, cellId);
     const cellManifestPath = path.join(cellDir, 'cell-manifest.json');
-    let cachedManifest   = null;
+    let cachedManifest     = null;
     let cellOutputComplete = false;
 
     if (fs.existsSync(cellManifestPath)) {
@@ -144,7 +194,10 @@ function discoverCells(rootDir) {
 
     cells.push({
       cellId,
+      // filename is relative to chart-source so downstream path.join() remains compatible.
       filename,
+      sourceRelativePath: filename,
+      sourceGroup,
       sourcePath: realPath,
       sha256,
       // Intermediate cache
@@ -182,4 +235,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { discoverCells, PIPELINE_SCHEMA_VERSION };
+module.exports = { discoverCells, findSourceFilesRecursive, PIPELINE_SCHEMA_VERSION };
