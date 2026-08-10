@@ -1,0 +1,170 @@
+MODE: IMPLEMENTATION WITH READ-ONLY AUDIT FIRST
+
+Work only on the current Dolphin branch.
+
+Do not merge.
+Do not refactor unrelated code.
+Do not alter GPS, SOG/COG, follow mode, Settings, vessel profile, search, themes, units, or base-style lifecycle.
+Do not change Satellite ↔ Hybrid behavior.
+Satellite ↔ Hybrid must remain same ESRI base with NO setStyle.
+
+Goal:
+1. Tell me exactly which official IENC cells/maps are currently loaded in the frontend.
+2. Improve SOUNDG portrayal for the Family Alpha:
+   - remove the current yellow sounding dots from normal display
+   - show charted depth labels progressively by zoom
+   - show only relation === "below" as normal depth labels
+   - never portray relation === "above" as navigable depth
+   - preserve the signed stored value
+   - do not change pipeline data
+
+==================================================
+A. READ-ONLY CURRENT DATA AUDIT
+==================================================
+
+Before changing code, report:
+
+- current branch
+- current HEAD
+- git status
+- all files in artifacts/dolphin/public/nautical/
+- pipeline-manifest.public.json contents relevant to:
+  - pipelineRunId
+  - validation.status
+  - sources[]
+  - cellId
+  - edition
+  - issueDate
+  - producer
+- exact sourceCellId values actually present in:
+  - navigation-marks.geojson
+  - depth-areas.geojson
+  - depth-contours.geojson
+  - soundings.geojson
+- whether frontend code loads any nautical/IENC data from any other location or cell
+
+Return a clear table:
+cellId | edition | issueDate | producer | present in current frontend data YES/NO
+
+Do not infer geographic coverage from the cell name.
+Do not claim all Zeeland is loaded unless the files prove it.
+
+==================================================
+B. SOUNDG FAMILY ALPHA PORTRAYAL
+==================================================
+
+Current problem:
+All soundings are visually shown as yellow point markers, making the map too crowded.
+
+Target behavior:
+
+1. Normal sounding portrayal should be depth text, not yellow dots.
+
+2. Only features where:
+chartedValueRelationToDatum === "below"
+may appear as normal charted-depth labels.
+
+3. Normal map label:
+use the positive display magnitude of the signed below-datum value, for example:
+
+2,4*
+
+The stored chartedValueMetres must remain signed and unchanged.
+Do not use abs() in normalization or data mutation.
+A formatter may display the magnitude for a feature already verified as relation === "below".
+
+4. Do NOT display relation === "above" as a normal depth label.
+These remain drying-height data and may still be available in object detail interaction.
+
+5. relation === "at" must not be silently represented as normal safe depth.
+
+==================================================
+C. PROGRESSIVE ZOOM DENSITY
+==================================================
+
+Implement progressive depth-label density.
+
+Desired user behavior:
+
+- zoomed far out:
+  only occasional representative sounding labels
+
+- medium zoom:
+  more depth labels
+
+- normal boating zoom:
+  substantially more labels
+
+- close zoom:
+  high detail
+
+Use MapLibre symbol-label collision/decluttering where possible.
+
+Prefer deterministic zoom-dependent density and label collision over rendering every label at all zooms.
+
+Do not introduce random sampling.
+The same map position and zoom should produce stable labels.
+
+Choose conservative initial zoom thresholds and document them.
+
+Do not let labels overlap excessively.
+Do not create flickering or unstable labels during small pans.
+
+==================================================
+D. POINT MARKERS
+==================================================
+
+Remove/hide the yellow SOUNDG circle layer from normal Family Alpha portrayal.
+
+If the point layer is still technically useful for click/tap interaction:
+- make it visually transparent or otherwise non-obtrusive
+- preserve interaction without showing thousands of yellow circles
+
+Do not break NauticalObjectSheet interaction.
+
+==================================================
+E. SAFETY
+==================================================
+
+Depth labels are charted values, not current water depth.
+
+Do not add:
+- "Current depth"
+- "Safe depth"
+- under-keel clearance
+- water-level correction
+- vessel-depth warnings
+
+Keep official/community sources separate.
+
+Do not modify any source provenance.
+
+==================================================
+F. VALIDATION
+==================================================
+
+Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+Do not claim manual testing.
+
+Final report must include:
+
+1. current branch and HEAD
+2. exactly which IENC cells are currently loaded
+3. source metadata for each loaded cell
+4. files modified
+5. old SOUNDG portrayal
+6. new SOUNDG portrayal
+7. zoom thresholds chosen
+8. how label collision/density works
+9. how above/below/at are handled
+10. whether tap interaction still works
+11. TypeScript result
+12. build result
+13. manual tests still required
+14. any blocker or uncertainty
+
+Do not start Zeeland-wide ingestion yet.
