@@ -1,0 +1,265 @@
+DOL-011 — Family Alpha nautical portrayal
+
+MODE:
+IMPLEMENTATION.
+
+Work only on the current branch:
+
+feature/v0.2.1b-official-ienc-integration
+
+Do not merge.
+Do not create a new branch.
+Do not change pipeline data.
+Do not ingest new IENC cells.
+Do not modify GPS, SOG/COG, follow mode, Settings, vessel profile,
+search, themes, units, or PWA behavior.
+
+CRITICAL MAP INVARIANT:
+
+base style lifecycle != overlay lifecycle
+
+Satellite and Hybrid share the same ESRI base.
+
+Satellite ↔ Hybrid MUST NOT call setStyle.
+Do not regress the existing deterministic overlay reconciliation.
+
+==================================================
+GOAL
+==================================================
+
+Improve the normal Dolphin map portrayal for the Family Alpha.
+
+Two current user-observed problems:
+
+1. When zooming in, too few charted depth labels remain visible.
+2. Official navigation marks are not visually clear/recognizable enough.
+
+Do not expand scope beyond these two problems.
+
+==================================================
+1. PRE-FLIGHT
+==================================================
+
+Before modifying code, report:
+
+- current branch
+- HEAD
+- git status
+- current sounding label implementation
+- current official navigation-mark implementation
+- exact dolphinKind values and feature counts in navigation-marks.geojson
+- confirm TOPMAR remains excluded from visible portrayal
+- confirm IENC source data still contains only cells:
+  - 1R76W8LI
+  - 1R7788RI
+
+If the branch differs or working tree contains unexplained code changes:
+ABORT.
+
+==================================================
+2. SOUNDING DEPTH DENSITY
+==================================================
+
+Current behavior is insufficient:
+
+MapLibre collision alone does not guarantee that substantially more
+depth labels become visible as the user zooms in.
+
+Target user behavior:
+
+- far zoom:
+  sparse representative charted-depth labels
+
+- medium zoom:
+  visibly more labels
+
+- normal boating zoom:
+  substantially more labels
+
+- close zoom:
+  high-detail portrayal with most/all non-overlapping relevant soundings visible
+
+Only features with:
+
+chartedValueRelationToDatum === "below"
+
+may be rendered as normal charted-depth labels.
+
+Do not portray "above" or "at" as normal water-depth labels.
+
+The stored signed chartedValueMetres value must remain unchanged.
+
+Do not modify normalized GeoJSON.
+
+==================================================
+3. DETERMINISTIC PROGRESSIVE DENSITY
+==================================================
+
+Do not rely solely on text-size + collision for density.
+
+Implement deterministic zoom-dependent label density.
+
+Requirements:
+
+- same source data + viewport + zoom gives stable results
+- no random sampling
+- no flickering caused by random feature selection
+- density clearly increases as zoom increases
+- MapLibre collision still prevents excessive overlaps
+
+A suitable approach may use deterministic properties already present
+on the feature (for example pipelineFeatureId / stable feature ordering)
+to select progressively larger subsets at lower zooms.
+
+Do not fabricate nautical values.
+
+Do not change pipelineFeatureId semantics.
+
+At the highest practical Family Alpha zoom level, do not unnecessarily
+suppress valid below-datum soundings except for label collision.
+
+Document the chosen thresholds and selection strategy.
+
+==================================================
+4. SOUNDING VISUAL STYLE
+==================================================
+
+Keep the current yellow/colored sounding dots hidden.
+
+Normal visual portrayal should be the charted-depth number.
+
+No "*" suffix is required.
+
+Examples:
+
+2.4
+6.1
+10.7
+
+Use the existing application locale/number-format conventions where practical.
+
+The transparent sounding hit target may remain because it has already
+been manually observed to work.
+
+Do not redesign NauticalObjectSheet in this task.
+
+==================================================
+5. OFFICIAL NAVIGATION MARK AUDIT
+==================================================
+
+Inspect navigation-marks.geojson and report exact counts by dolphinKind.
+
+Current expected data classes include:
+
+- beacon-special
+- buoy-lateral
+- buoy-special
+- light
+- topmark
+
+TOPMAR:
+
+Keep hidden from independent visible portrayal because formal parent
+association remains unresolved.
+
+Do not silently change that decision.
+
+==================================================
+6. OFFICIAL NAVIGATION MARK PORTRAYAL
+==================================================
+
+Improve the currently generic circle portrayal so official navigation
+marks are clearly visible and distinguishable on the Dolphin map.
+
+This is prototype Family Alpha portrayal.
+
+Requirements:
+
+- use only verified properties present in the normalized data
+- do not invent port/starboard semantics when the required attribute is absent
+- do not claim IHO S-52 compliance
+- preserve sourceKind: official
+- do not combine with OpenSeaMap
+- do not move official features
+- do not alter provenance
+
+Prefer simple recognizable MapLibre vector shapes/symbols using existing
+data and no new external dependency unless absolutely necessary.
+
+If the data contains sufficient verified attributes to safely distinguish
+relevant buoy/beacon categories, use them.
+
+If an attribute is ambiguous or unavailable:
+use a neutral official-mark symbol rather than inventing nautical meaning.
+
+Lights may be portrayed distinctly but must not imply characteristics
+that are not present in the data.
+
+==================================================
+7. OPENSEAMAP
+==================================================
+
+Do NOT use OpenSeaMap as a replacement for official IENC marks in this task.
+
+Community seamarks must remain a separate:
+
+sourceKind: community
+official: false
+
+source/layer/toggle.
+
+Do not silently merge official and community marks.
+
+==================================================
+8. SCOPE / FILE DISCIPLINE
+==================================================
+
+Prefer changing only:
+
+artifacts/dolphin/src/modules/nautical/iencLayers.ts
+
+If another file is genuinely required:
+explain why before modifying it in the final report.
+
+No broad refactor.
+
+==================================================
+9. AUTOMATED CHECKS
+==================================================
+
+Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+
+and:
+
+pnpm --filter @workspace/dolphin build
+
+These do not count as manual testing.
+
+==================================================
+10. FINAL REPORT
+==================================================
+
+Return:
+
+1. branch and final HEAD
+2. files modified
+3. official navigation-mark counts by dolphinKind
+4. sounding density strategy
+5. exact zoom thresholds
+6. expected number/percentage of eligible depth labels at each zoom band
+7. handling of below / above / at
+8. navigation-mark portrayal changes
+9. which verified attributes are used for mark portrayal
+10. any attributes that were deliberately NOT interpreted
+11. confirmation TOPMAR remains deferred
+12. confirmation OpenSeaMap remains separate
+13. TypeScript result
+14. build result
+15. manual tests still required
+16. deviations or blockers
+
+Do not claim MANUALLY TESTED.
+Do not start Zeeland ingestion.
+Do not add Satellite depth portrayal yet.

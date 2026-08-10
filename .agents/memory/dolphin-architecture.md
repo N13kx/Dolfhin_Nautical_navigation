@@ -1,38 +1,88 @@
 ---
 name: Dolphin Architecture
-description: Module layout, Hybrid mode fix, GPS tracking, search UX, nautical investigation findings.
+description: Module layout, key fixes, UX patterns, and IENC layer implementation decisions for the Dolphin navigation app.
 ---
 
-## Module layout (confirmed on disk)
+# Dolphin Architecture
 
-Only four real nautical/map modules exist:
-- `modules/nautical/types.ts` — BBox, NauticalObject, DepthContour, NauticalDataProvider (placeholder interface)
-- `modules/map/overlayManager.ts` — OverlaySpec, applyOverlays() (demo route + OpenSeaMap)
-- `modules/map/styles.ts` — three MapLibre StyleSpecification literals (Dolphin/Satellite/Hybrid)
-- `modules/map/types.ts` — MapMode, TrackingMode, MapViewRef
+## Module layout
+- `artifacts/dolphin/src/` — main frontend
+  - `pages/DolphinApp.tsx` — root state: mapMode, layerGroupVisibility, selectedFeature, manifest
+  - `components/MapView.tsx` — props: layerGroupVisibility, onFeatureClick; applies group visibility after every overlay apply; global click handler queries IENC clickable layers
+  - `components/LayerSheet.tsx` — layer toggle section; Dolphin shows nav-marks + charted-depths; Hybrid adds community-seamarks; Satellite shows none
+  - `components/NauticalObjectSheet.tsx` — bottom sheet for tapped IENC features; signed sounding display model
+  - `modules/map/overlayManager.ts` — OverlaySpec gains groupId?; applyLayerGroupVisibility(); OpenSeaMap gets groupId: 'community-seamarks' (default OFF)
+  - `modules/nautical/iencLayers.ts` — all IENC layer specs (see below)
+  - `modules/nautical/manifestLoader.ts` — typed manifest loader, getCellMeta(cellId), aborts if status ≠ PASS
 
-Community, environment, intelligence modules are interfaces only. NauticalLayerRegistry, useNauticalOverlays, NauticalObjectSheet, EncFeatureTypes do NOT exist on disk.
+## Critical fixes to preserve
 
-## Stabilization pass (v0.2)
+### Satellite ↔ Hybrid: NO setStyle
+Same ESRI base. Switching between Satellite and Hybrid MUST NOT call setStyle.
+Overlays reconciled via removeOverlays/applyOverlays only.
+Regression: zero-diff lifecycle bug (map goes blank).
 
-- Hybrid mode: `osmVisible` initialized `true` so OpenSeaMap loads by default
-- LayerSheet: mode cards and Hybrid toggle visible together (not close-before-visible)
-- PDOK lines: removed from UI (fetch/cache preserved in overlayManager)
+### GPS stale detection
+Uses timestamp delta; no special MapLibre hooks needed.
 
-## Nautical investigation (v0.2.1)
+### Tracking snap-back
+Implemented in DolphinApp; do not break follow-mode state on re-renders.
 
-Investigation report at `nautical-investigation/REPORT.md`. Key findings:
+## IENC layer structure (iencLayers.ts) — as of DOL-011
 
-**Cells:** 1R76W8LI (edition 78, 2026-06-17, bbox 4.133°–4.333°E, 51.575°–51.625°N) and 1R7788RI (edition 46, 2026-06-29, bbox 4.333°–4.533°E, 51.625°–51.675°N). Both IENC Ed 2.4, 1:2000 scale, Rijkswaterstaat (AGEN=7979).
+Layer IDs:
+- `ienc-nav-marks-halo` — lights-only glow ring (visual, not clickable)
+- `ienc-nav-marks-point` — main circle, tap target (clickable)
+- `ienc-nav-marks-label` — OBJNAM text, buoys/beacons only, minzoom 11 (not clickable)
+- `ienc-depth-areas-fill` — DEPARE fill (clickable)
+- `ienc-depth-contours-line` — DEPCNT line (clickable)
+- `ienc-soundings-point` — transparent hit target opacity=0 (clickable)
+- `ienc-soundings-label` — progressive text labels, below-only
 
-**Cells are diagonally adjacent** (corner-touching), NOT edge-adjacent — no seam analysis applies.
+Only IENC_CLICKABLE_LAYER_IDS are wired to queryRenderedFeatures. Halo and label layers excluded.
 
-**GDAL:** 3.2.2 at `~/.nix-profile/bin/` (needs PATH export). S-57 driver confirmed. DSPM is not a separate GDAL layer — all DSID/DSSI/DSPM fields are in the DSID layer.
+## Nav-mark portrayal decisions (DOL-011)
 
-**Blocking unknowns before any depth display:**
-- VDAT=24 and SDAT=42 exceed standard S-57 tables — exact datum UNKNOWN, requires IENC Product Specification 2.4
-- Rijkswaterstaat data licence terms unconfirmed
+sourceProperties is a REAL nested object in GeoJSON (not stringified).
+Access via: `['get', 'KEY', ['get', 'sourceProperties']]`
 
-**Why:** Depth values are safety-critical; displaying them against an unknown datum could mislead sailors.
+buoy-lateral colour: CATLAM attribute (verified S-57):
+  2=port→red, 3=starboard→green, 4=preferred→violet, unknown→amber.
 
-**GDAL sign convention:** Z values are elevations — negative Z = below sounding datum (navigable depth), positive Z = above datum (dry/shallow).
+light colour: COLOUR[0] attribute (verified S-57 string code):
+  "1"=white, "3"=red, "4"=green, "6"=yellow, other→teal.
+
+buoy-special: yellow (all 5 have COLOUR=6).
+beacon-special: dark slate (both have COLOUR=2).
+
+Attributes deliberately NOT used: LITCHR, SIGPER, SIGGRP (deferred to follow-up),
+BCNSHP, BOYSHP, COLPAT, CATSPM.
+
+OBJNAM label: minzoom 11, buoys+beacons only (not lights — too dense).
+Filter: non-empty coalesce guard (not `has` expr, for type safety).
+
+## Sounding label density (DOL-011)
+
+Primary control: text-padding interpolation (80→2px from zoom 10→16).
+Secondary: text-size 9→12px.
+symbol-sort-key ascending by abs(chartedValueMetres) → shallower wins collision.
+Only `below` relation labeled. `above` (drying heights) and `at` never labeled.
+Targets: ~7-15% z10 / ~20-35% z12 / ~55-75% z14 / ~85-95% z16.
+
+## TOPMAR decision
+Deferred. 15/15 have associationRefsVerifiedInGdalOutput:false.
+4/15 spatially detached. Excluded via filter. Documented in ACCEPTANCE-TEST.md.
+Tracked in existing task "Enable topmark rendering once chart association records are verified".
+
+## Data invariants
+- Two cells only: 1R76W8LI (ed.78), 1R7788RI (ed.46). Both Rijkswaterstaat.
+- pipelineFeatureId format: `cellId/OBJCLASS/RCID/index` for soundings.
+- chartedValueMetres: signed (negative=below datum). Never mutate. Display abs() for labels.
+- depthDatum: "Approximate LAT" (SDAT=42, VERIFIED).
+- verticalDatum: "Local Datum" (VDAT=24, NAP identity UNVERIFIED).
+
+## Push auth note
+GitHub HTTPS push requires a PAT. Previous session token has expired.
+Remote: https://github.com/N13kx/Dolfhin_Nautical_navigation
+User: N13kx / niekgirmscheid@gmail.com
+Ask user to re-supply PAT when push is needed.
