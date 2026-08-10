@@ -12,6 +12,7 @@ import {
   applyLayerGroupVisibility,
 } from '../modules/map/overlayManager';
 import { IENC_CLICKABLE_LAYER_IDS } from '../modules/nautical/iencLayers';
+import { IencViewportController } from '../modules/nautical/catalogLoader';
 
 export type { MapMode, MapViewRef };
 
@@ -42,6 +43,7 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
     const onUserInteractionRef = useRef(onUserInteraction);
     const onFeatureClickRef = useRef(onFeatureClick);
     const layerGroupVisibilityRef = useRef(layerGroupVisibility);
+    const iencControllerRef = useRef(new IencViewportController(import.meta.env.BASE_URL));
     const [webglFailed, setWebglFailed] = useState(false);
 
     useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -130,6 +132,12 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
 
       map.current = initialMap;
 
+      const modeShowsIenc = () => modeRef.current === 'Dolphin' || modeRef.current === 'Hybrid';
+      const reconcileIenc = () => {
+        if (!modeShowsIenc() || !map.current) return;
+        void iencControllerRef.current.reconcile(initialMap);
+      };
+
       // WebGL runtime failure (e.g. context lost)
       initialMap.on('error', (e) => {
         const msg = (e.error as Error | undefined)?.message?.toLowerCase() ?? '';
@@ -145,6 +153,8 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         const overlays = getOverlaysForMode(modeRef.current);
         applyOverlays(initialMap, overlays);
         applyLayerGroupVisibility(initialMap, overlays, layerGroupVisibilityRef.current);
+        iencControllerRef.current.invalidateStyle();
+        reconcileIenc();
         onMapLoad?.();
       });
 
@@ -159,8 +169,19 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         const overlays = getOverlaysForMode(modeRef.current);
         applyOverlays(initialMap, overlays);
         applyLayerGroupVisibility(initialMap, overlays, layerGroupVisibilityRef.current);
+        iencControllerRef.current.invalidateStyle();
+        reconcileIenc();
       };
       initialMap.on('style.load', handleStyleLoad);
+
+      // Reconcile only after camera movement settles. A short debounce coalesces
+      // bursts from animated movement without issuing duplicate per-cell fetches.
+      let moveEndTimer: ReturnType<typeof setTimeout> | null = null;
+      const handleMoveEnd = () => {
+        if (moveEndTimer) clearTimeout(moveEndTimer);
+        moveEndTimer = setTimeout(reconcileIenc, 150);
+      };
+      initialMap.on('moveend', handleMoveEnd);
 
       // User drags or rotates → notify parent to exit tracking mode
       const handleUserInteraction = () => {
@@ -191,6 +212,9 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         initialMap.off('dragstart', handleUserInteraction);
         initialMap.off('rotatestart', handleUserInteraction);
         initialMap.off('click', handleMapClick);
+        initialMap.off('moveend', handleMoveEnd);
+        if (moveEndTimer) clearTimeout(moveEndTimer);
+        iencControllerRef.current.invalidateStyle();
         // Null the ref BEFORE remove() so that any in-flight events queued
         // during removal don't attempt to apply overlays to a dead instance.
         map.current = null;
@@ -228,6 +252,10 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
         const nextOverlays = getOverlaysForMode(nextMode);
         applyOverlays(m, nextOverlays);
         applyLayerGroupVisibility(m, nextOverlays, layerGroupVisibilityRef.current);
+        iencControllerRef.current.invalidateStyle();
+        if (nextMode === 'Dolphin' || nextMode === 'Hybrid') {
+          void iencControllerRef.current.reconcile(m);
+        }
       }
 
       prevModeRef.current = nextMode;

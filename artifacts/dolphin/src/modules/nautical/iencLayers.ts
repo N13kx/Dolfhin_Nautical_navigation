@@ -1,9 +1,9 @@
 /**
  * iencLayers.ts — IENC GeoJSON overlay specs for MapLibre.
  *
- * Defines four GeoJSON sources and their corresponding display layers for the
- * two pilot IENC cells (1R76W8LI, 1R7788RI) published to
- * `public/nautical/` by the data pipeline.
+ * Defines four stable GeoJSON sources and their corresponding display layers.
+ * The viewport controller fills these sources from validated per-cell files
+ * referenced by `public/nautical/catalog.json`.
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
  * │  NOT IHO S-52 COMPLIANT — prototype portrayal only.                 │
@@ -97,6 +97,7 @@
  */
 
 import type { OverlaySpec } from '../map/overlayManager';
+import { EMPTY_FEATURE_COLLECTION } from './catalogLoader';
 
 /** Layer/source IDs used by IENC overlays — exported for click wiring. */
 export const IENC_LAYER_IDS = {
@@ -127,13 +128,13 @@ export const IENC_CLICKABLE_LAYER_IDS: string[] = [
 ];
 
 /**
- * Returns IENC OverlaySpec array, resolving source data URLs against baseUrl.
- * Must be called with import.meta.env.BASE_URL so paths work in both dev and prod.
+ * Returns IENC OverlaySpec array. Sources start empty and are populated by the
+ * catalog-backed viewport controller after the MapLibre style is ready.
  *
  * Sources are registered idempotently by applyOverlays — safe to call multiple times.
  */
 export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
-  const b = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  void baseUrl;
 
   return [
     // ── Navigation marks — light glow halo ──────────────────────────
@@ -146,7 +147,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-nav-marks-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/navigation-marks.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.navMarksHalo,
       layer: {
@@ -196,7 +197,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-nav-marks-source', // source already registered above
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/navigation-marks.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.navMarksPoint,
       layer: {
@@ -278,7 +279,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-nav-marks-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/navigation-marks.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.navMarksInner,
       layer: {
@@ -314,7 +315,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-nav-marks-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/navigation-marks.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.navMarksBeaconStake,
       layer: {
@@ -361,7 +362,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-nav-marks-source', // source already registered above
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/navigation-marks.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.navMarksLabel,
       layer: {
@@ -407,7 +408,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-depth-areas-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/depth-areas.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.depthAreasFill,
       layer: {
@@ -436,7 +437,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-depth-contours-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/depth-contours.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.depthContoursLine,
       layer: {
@@ -476,7 +477,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-soundings-source',
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/soundings.geojson`,
+        data: EMPTY_FEATURE_COLLECTION,
       },
       layerId: IENC_LAYER_IDS.soundingsPoint,
       layer: {
@@ -541,7 +542,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       sourceId: 'ienc-soundings-source', // source already registered above
       source: {
         type: 'geojson' as const,
-        data: `${b}nautical/soundings.geojson`, // applyOverlays guards against dup source
+        data: EMPTY_FEATURE_COLLECTION, // applyOverlays guards against dup source
       },
       layerId: IENC_LAYER_IDS.soundingsLabel,
       layer: {
