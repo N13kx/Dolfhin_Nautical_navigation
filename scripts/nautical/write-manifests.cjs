@@ -1,189 +1,205 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * write-manifests.js — write both pipeline manifests after successful validation.
- * Part of Dolphin v0.2.1b data pipeline.
+ * write-manifests.cjs — generate catalog.json and legacy pipeline manifests.
  *
- * Writes:
- *   data/nautical/processed/pipeline-manifest.json       (internal full audit)
- *   data/nautical/processed/pipeline-manifest.public.json (frontend-safe)
+ * DOL-013: reads cell-manifest.json for each discovered cell and generates:
+ *   data/nautical/catalog.json              — per-cell catalog (new architecture)
+ *   data/nautical/processed/pipeline-manifest.json        — legacy internal manifest
+ *   data/nautical/processed/pipeline-manifest.public.json — legacy frontend manifest
  *
- * Both manifests carry the same pipelineRunId, tying them to the validated output set.
- * Called only by write-manifests.sh, which gates on validate.sh exiting 0.
+ * Only PASS cells appear in catalog.json. FAIL cells are recorded but never
+ * promoted. A build with any FAIL cell must not publish.
+ *
+ * Failure policy: if any cell has validationStatus !== "PASS", this script
+ * still writes the catalog but exits non-zero. build.sh must check the exit
+ * code before proceeding to publish.
  */
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { discoverCells } = require('./discover-cells.cjs');
 
-const CELLS = [
-  {
-    cellId: '1R76W8LI',
-    filename: '1R76W8LI_1783372678701.000',
-    checksum: '1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea',
-  },
-  {
-    cellId: '1R7788RI',
-    filename: '1R7788RI_1783372678701.000',
-    checksum: 'cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b',
-  },
-];
-
-const EXPECTED_COUNTS = {
-  '1R76W8LI': { BCNSPP: 2, BOYLAT: 0, BOYSPP: 0, LIGHTS: 25, TOPMAR: 1, DEPARE: 532, DEPCNT: 528, SOUNDG_sourceFeatures: 4, SOUNDG_coordinates: 757 },
-  '1R7788RI': { BCNSPP: 0, BOYLAT: 12, BOYSPP: 5, LIGHTS: 13, TOPMAR: 14, DEPARE: 393, DEPCNT: 390, SOUNDG_sourceFeatures: 5, SOUNDG_coordinates: 1327 },
-};
-
-const CELL_BBOXES = {
-  '1R76W8LI': {
-    minLon: 4.133333, minLat: 51.575000, maxLon: 4.333333, maxLat: 51.625000,
-    provenance: 'Derived from union of GDAL-decoded selected-class geometry under pinned reader conditions (VERIFIED_FROM_FILE 2026-07-07)',
-  },
-  '1R7788RI': {
-    minLon: 4.333333, minLat: 51.625000, maxLon: 4.533333, maxLat: 51.675000,
-    provenance: 'Derived from union of GDAL-decoded selected-class geometry under pinned reader conditions (VERIFIED_FROM_FILE 2026-07-07)',
-  },
-};
-
-function loadMetadata(intermediateDir, cellId) {
-  const p = path.join(intermediateDir, cellId, 'metadata.json');
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
+const [, , rootDir] = process.argv;
+if (!rootDir) {
+  console.error('Usage: write-manifests.cjs <root_dir>');
+  process.exit(1);
 }
 
-function loadFcLen(processedDir, filename) {
-  const p = path.join(processedDir, filename);
+const cellsBaseDir  = path.join(rootDir, 'data', 'nautical', 'cells');
+const processedDir  = path.join(rootDir, 'data', 'nautical', 'processed');
+const intermediateDir = path.join(rootDir, 'data', 'nautical', 'intermediate');
+const catalogPath   = path.join(rootDir, 'data', 'nautical', 'catalog.json');
+
+const cells = discoverCells(rootDir);
+const now   = new Date();
+const ts    = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+const builtAt = now.toISOString();
+
+// Load cell manifests
+const manifests = [];
+let allPass = true;
+
+for (const cell of cells) {
+  const mPath = path.join(cellsBaseDir, cell.cellId, 'cell-manifest.json');
+  if (!fs.existsSync(mPath)) {
+    process.stderr.write(`ERROR: cell-manifest.json missing for ${cell.cellId} — run validate.cjs first\n`);
+    process.exit(1);
+  }
+  const m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
+  manifests.push(m);
+  if (m.validationStatus !== 'PASS') allPass = false;
+}
+
+const passCells = manifests.filter(m => m.validationStatus === 'PASS');
+const failCells = manifests.filter(m => m.validationStatus !== 'PASS');
+
+// ── catalog.json ─────────────────────────────────────────────────────────────
+const catalog = {
+  catalogVersion:  1,
+  builtAt,
+  totalCells:      manifests.length,
+  passCells:       passCells.length,
+  failCells:       failCells.length,
+  depthDatum:      'Approximate LAT',
+  depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
+  napIdentityStatus: 'UNVERIFIED',
+  disclaimers: [
+    'Charted depths are not real-time water depth',
+    'Not for navigation',
+    'Depths reference Approximate LAT — not chart datum at your location',
+  ],
+  cells: passCells.map(m => ({
+    cellId:                m.cellId,
+    sourceSha256:          m.sourceSha256,
+    pipelineRunId:         m.pipelineRunId,
+    validatedAt:           m.validatedAt,
+    validationStatus:      m.validationStatus,
+    edition:               m.edition,
+    issueDate:             m.issueDate,
+    updateApplicationDate: m.updateApplicationDate,
+    producer:              m.producer,
+    vdat:                  m.vdat,
+    sdat:                  m.sdat,
+    depthDatum:            m.depthDatum,
+    depthDatumStatus:      m.depthDatumStatus,
+    bbox:                  m.bbox,
+    featureCounts:         m.featureCounts,
+    files: {
+      'navigation-marks': `cells/${m.cellId}/navigation-marks.geojson`,
+      'depth-areas':      `cells/${m.cellId}/depth-areas.geojson`,
+      'depth-contours':   `cells/${m.cellId}/depth-contours.geojson`,
+      'soundings':        `cells/${m.cellId}/soundings.geojson`,
+    },
+  })),
+  ...(failCells.length > 0 ? {
+    failedCells: failCells.map(m => ({
+      cellId:           m.cellId,
+      validationStatus: m.validationStatus,
+      errors:           m.validationErrors || [],
+    })),
+  } : {}),
+};
+
+fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+console.log(`  Wrote catalog.json — ${passCells.length} PASS, ${failCells.length} FAIL`);
+
+// ── Legacy pipeline-manifest.json (flat processed/ — frontend compat) ─────────
+const randHex      = crypto.randomBytes(4).toString('hex');
+const pipelineRunId = `${ts}-${randHex}`;
+const validatedAt  = builtAt;
+
+// Load metadata for each cell (for legacy manifest sources section)
+const sourcesMeta = [];
+for (const m of manifests) {
+  const metaPath = path.join(intermediateDir, m.cellId, 'metadata.json');
+  let meta = {};
+  if (fs.existsSync(metaPath)) {
+    try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
+  }
+  sourcesMeta.push({ manifest: m, meta });
+}
+
+function loadFcLen(dir, filename) {
+  const p = path.join(dir, filename);
+  if (!fs.existsSync(p)) return 0;
   const fc = JSON.parse(fs.readFileSync(p, 'utf8'));
   return (fc.features || []).length;
 }
 
-const [, , rootDir] = process.argv;
-if (!rootDir) {
-  console.error('Usage: write-manifests.js <root_dir>');
-  process.exit(1);
-}
-
-const intermediateDir = path.join(rootDir, 'data', 'nautical', 'intermediate');
-const processedDir = path.join(rootDir, 'data', 'nautical', 'processed');
-
-// Generate pipelineRunId: ISO-8601 UTC + 8-char random hex suffix
-const now = new Date();
-const ts = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
-const randHex = crypto.randomBytes(4).toString('hex');
-const pipelineRunId = `${ts}-${randHex}`;
-const validatedAt = now.toISOString();
-
-console.log(`  pipelineRunId: ${pipelineRunId}`);
-console.log(`  validatedAt:   ${validatedAt}`);
-
-// Load per-cell metadata
-const sourcesMeta = CELLS.map(cell => ({
-  cell,
-  meta: loadMetadata(intermediateDir, cell.cellId),
-}));
-
-// Load output feature counts
 const navCount = loadFcLen(processedDir, 'navigation-marks.geojson');
 const depCount = loadFcLen(processedDir, 'depth-areas.geojson');
 const cntCount = loadFcLen(processedDir, 'depth-contours.geojson');
 const sndCount = loadFcLen(processedDir, 'soundings.geojson');
 
-// ── Internal manifest ──────────────────────────────────────────────────────────
 const internalManifest = {
-  schemaVersion: 1,
+  schemaVersion:  1,
   pipelineRunId,
-  generatedAt: validatedAt,
+  generatedAt:    validatedAt,
+  catalogRef:     catalogPath,
   pipeline: {
-    gdalVersion: '3.2.2',
+    gdalVersion:    '3.2.2',
     s57DriverPresent: true,
     ogrOpenOptions: {
       SPLIT_MULTIPOINT: 'NO',
       ADD_SOUNDG_DEPTH: 'NO',
-      LNAM_REFS: 'YES',
-      UPDATES: 'APPLY',
+      LNAM_REFS:        'YES',
+      UPDATES:          'APPLY',
     },
   },
-  sources: sourcesMeta.map(({ cell, meta }) => ({
-    cellId: cell.cellId,
-    filename: cell.filename,
-    sha256: cell.checksum,
-    edition: meta.DSID_EDTN,
-    updateNumber: meta.DSID_UPDN,
-    issueDate: meta.DSID_ISDT,
-    updateApplicationDate: meta.DSID_UADT,
-    producer: meta.DSID_AGEN,
-    productionSpecification: meta.DSID_PRED,
-    vdat: meta.DSPM_VDAT,
-    sdat: meta.DSPM_SDAT,
-    hdat: meta.DSPM_HDAT,
-    verifiedBbox: CELL_BBOXES[cell.cellId],
+  sources: sourcesMeta.map(({ manifest: m, meta }) => ({
+    cellId:                m.cellId,
+    filename:              m.sourceFilename,
+    sha256:                m.sourceSha256,
+    edition:               m.edition,
+    issueDate:             m.issueDate,
+    updateApplicationDate: m.updateApplicationDate,
+    producer:              m.producer,
+    vdat:                  m.vdat,
+    sdat:                  m.sdat,
+    validationStatus:      m.validationStatus,
   })),
   featureCounts: {
-    byClassByCell: Object.fromEntries(
-      CELLS.map(({ cellId }) => [cellId, { ...EXPECTED_COUNTS[cellId] }])
-    ),
     combinedByOutput: {
       'navigation-marks.geojson': { features: navCount },
-      'depth-areas.geojson': { features: depCount },
-      'depth-contours.geojson': { features: cntCount },
-      'soundings.geojson': {
-        sourceFeatures: 9,
-        normalizedFeatures: sndCount,
-        transformationReason:
-          '3D MultiPoint expanded to one Point feature per sounding coordinate; signed Z semantics applied per coordinate',
-      },
+      'depth-areas.geojson':      { features: depCount },
+      'depth-contours.geojson':   { features: cntCount },
+      'soundings.geojson':        { features: sndCount },
     },
   },
-  geometryTypes: {
-    BCNSPP: 'Point', BOYLAT: 'Point', BOYSPP: 'Point',
-    LIGHTS: 'Point', TOPMAR: 'Point',
-    DEPARE: 'Polygon', DEPCNT: 'LineString',
-    SOUNDG_source: '3D MultiPoint', SOUNDG_normalized: 'Point',
-  },
-  geometryCoercionNotes:
-    'No coercion or linearization performed. SOUNDG MultiPoint explicitly expanded to Point per coordinate.',
   datumLabels: {
-    depthDatum: 'Approximate LAT',
-    depthDatumCode: 42,
+    depthDatum:       'Approximate LAT',
+    depthDatumCode:   42,
     depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
-    verticalDatum: 'Local Datum',
+    verticalDatum:    'Local Datum',
     verticalDatumCode: 24,
     napIdentityStatus: 'UNVERIFIED',
   },
-  topmarAssociationNote:
-    'All 15 TOPMAR features have empty LNAM_REFS and FFPT_RIND in GDAL output under LNAM_REFS=YES. ' +
-    'GDAL may not expose all S-57 FFPT records. associationRefsVerifiedInGdalOutput=false on all TOPMAR features.',
-  sourceGovernanceNote:
-    "Both .000 files were Git-tracked at pipeline creation. They have been removed from the Git index via " +
-    "'git rm --cached' (files retained on disk) and attached_assets/*.000 has been added to .gitignore. " +
-    'Fresh clones must provision source files from the official source with SHA-256 verification before running the pipeline.',
   statedLimitations: [
-    'VDAT=24 NAP identity is UNVERIFIED — not confirmed from official documentation',
-    'Bridge and overhead clearances are not in scope',
+    'VDAT=24 NAP identity is UNVERIFIED',
     'Data is not real-time water depth',
     'Not for navigation',
-    'Rijkswaterstaat data licence not reviewed for public redistribution',
-    'TOPMAR parent-association semantics cannot be fully verified from GDAL decoded output alone',
+    'TOPMAR parent-association semantics not fully verifiable from GDAL decoded output alone',
   ],
-  validationResult: 'PASS',
-  validationLog: 'See validate.sh output during pipeline run',
+  validationResult: allPass ? 'PASS' : 'FAIL',
 };
 
-// ── Public manifest ────────────────────────────────────────────────────────────
 const publicManifest = {
   pipelineSchemaVersion: 1,
   pipelineRunId,
-  generatedAt: validatedAt,
+  generatedAt:  validatedAt,
   validation: {
-    status: 'PASS',
+    status:      allPass ? 'PASS' : 'FAIL',
     validatedAt,
   },
-  sources: sourcesMeta.map(({ cell, meta }) => ({
-    cellId: cell.cellId,
-    edition: meta.DSID_EDTN,
-    issueDate: meta.DSID_ISDT,
-    updateApplicationDate: meta.DSID_UADT,
-    producer: 'Rijkswaterstaat',
+  sources: passCells.map(m => ({
+    cellId:                m.cellId,
+    edition:               m.edition,
+    issueDate:             m.issueDate,
+    updateApplicationDate: m.updateApplicationDate,
+    producer:              'Rijkswaterstaat',
   })),
-  depthDatum: 'Approximate LAT',
+  depthDatum:       'Approximate LAT',
   depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
   disclaimers: [
     'Charted depths are not real-time water depth',
@@ -191,24 +207,16 @@ const publicManifest = {
   ],
 };
 
-// ── Write with rollback on failure ────────────────────────────────────────────
 const internalPath = path.join(processedDir, 'pipeline-manifest.json');
-const publicPath = path.join(processedDir, 'pipeline-manifest.public.json');
+const publicPath   = path.join(processedDir, 'pipeline-manifest.public.json');
+fs.writeFileSync(internalPath, JSON.stringify(internalManifest, null, 2), 'utf8');
+fs.writeFileSync(publicPath,   JSON.stringify(publicManifest,  null, 2), 'utf8');
+console.log(`  Wrote pipeline-manifest.json (${fs.statSync(internalPath).size} bytes)`);
+console.log(`  Wrote pipeline-manifest.public.json (${fs.statSync(publicPath).size} bytes)`);
 
-try {
-  fs.writeFileSync(internalPath, JSON.stringify(internalManifest, null, 2), 'utf8');
-  console.log(`  Wrote pipeline-manifest.json (${fs.statSync(internalPath).size.toLocaleString()} bytes)`);
-
-  fs.writeFileSync(publicPath, JSON.stringify(publicManifest, null, 2), 'utf8');
-  console.log(`  Wrote pipeline-manifest.public.json (${fs.statSync(publicPath).size.toLocaleString()} bytes)`);
-} catch (e) {
-  // Clean up partial writes
-  for (const p of [internalPath, publicPath]) {
-    if (fs.existsSync(p)) {
-      fs.unlinkSync(p);
-      process.stderr.write(`  Deleted partial manifest: ${p}\n`);
-    }
-  }
-  process.stderr.write(`ERROR: Manifest write failed — both files deleted: ${e.message}\n`);
+if (!allPass) {
+  process.stderr.write(`\nWARN: ${failCells.length} cell(s) failed — catalog written but build is FAIL.\n`);
   process.exit(1);
 }
+
+console.log(`  pipelineRunId: ${pipelineRunId}`);

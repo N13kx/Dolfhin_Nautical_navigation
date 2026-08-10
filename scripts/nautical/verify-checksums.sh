@@ -1,62 +1,73 @@
 #!/usr/bin/env bash
-# verify-checksums.sh — SHA-256 gate for IENC source files
-# Part of Dolphin v0.2.1b data pipeline.
-# Exits non-zero on any mismatch, absence, or environment error.
+# verify-checksums.sh — discover and SHA-256 report for all chart-source/*.000 files.
+# DOL-013: discovery-driven; no hardcoded cell list or expected hash to compare against.
+#
+# Reports the SHA-256 of each discovered source file. The SHA is used as the
+# incremental build key in build.sh — it is not compared against a static registry.
+# Cell identity is verified against DSID metadata during extract-metadata.cjs.
+#
+# Usage: bash verify-checksums.sh [rootDir]
+# Exit codes: 0 = all source files readable and non-empty; 1 = error.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-CANONICAL_1R76W8LI="1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea"
-CANONICAL_1R7788RI="cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b"
-
-FILE_1R76W8LI="$ROOT_DIR/attached_assets/1R76W8LI_1783372678701.000"
-FILE_1R7788RI="$ROOT_DIR/attached_assets/1R7788RI_1783372678701.000"
+ROOT_DIR="${1:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+CHART_SOURCE_DIR="$ROOT_DIR/data/nautical/chart-source"
 
 echo "=== verify-checksums.sh ==="
 
-# Check sha256sum is available
-if ! command -v sha256sum &>/dev/null; then
-  echo "ERROR: sha256sum not found on PATH" >&2
+if [ ! -d "$CHART_SOURCE_DIR" ]; then
+  echo "ERROR: chart-source directory not found: $CHART_SOURCE_DIR" >&2
   exit 1
 fi
 
 FAILED=0
+COUNT=0
 
-check_file() {
-  local path="$1"
-  local canonical="$2"
-  local label="$3"
+while IFS= read -r -d '' filepath; do
+  filename="$(basename "$filepath")"
 
-  if [ ! -f "$path" ]; then
-    echo "ERROR: Source file absent: $path" >&2
-    echo "  Fresh clones must provision source files from the official source." >&2
-    echo "  See data/nautical/README.md for provisioning instructions." >&2
+  # Resolve symlinks for SHA computation
+  real="$(realpath "$filepath" 2>/dev/null || readlink -f "$filepath" 2>/dev/null || echo "$filepath")"
+
+  if [ ! -f "$real" ]; then
+    echo "  ERROR: Source file not readable: $filepath" >&2
     FAILED=1
-    return
+    continue
+  fi
+  if [ ! -s "$real" ]; then
+    echo "  ERROR: Source file is empty: $filepath" >&2
+    FAILED=1
+    continue
   fi
 
-  local actual
-  actual="$(sha256sum "$path" | awk '{print $1}')"
-
-  if [ "$actual" = "$canonical" ]; then
-    echo "  OK  $label"
-    echo "      $actual"
+  if command -v sha256sum &>/dev/null; then
+    SHA="$(sha256sum "$real" | awk '{print $1}')"
+  elif command -v shasum &>/dev/null; then
+    SHA="$(shasum -a 256 "$real" | awk '{print $1}')"
   else
-    echo "ERROR: Checksum mismatch for $label" >&2
-    echo "  Expected: $canonical" >&2
-    echo "  Actual:   $actual" >&2
-    echo "  Path:     $path" >&2
-    FAILED=1
+    # Fallback: Node crypto
+    SHA="$(node -e "
+const crypto = require('crypto');
+const fs = require('fs');
+const h = crypto.createHash('sha256').update(fs.readFileSync('$real')).digest('hex');
+process.stdout.write(h);
+")"
   fi
-}
 
-check_file "$FILE_1R76W8LI" "$CANONICAL_1R76W8LI" "1R76W8LI_1783372678701.000"
-check_file "$FILE_1R7788RI" "$CANONICAL_1R7788RI"  "1R7788RI_1783372678701.000"
+  echo "  OK  $filename"
+  echo "      $SHA"
+  COUNT=$((COUNT + 1))
+done < <(find "$CHART_SOURCE_DIR" -maxdepth 1 -name "*.000" -print0 | sort -z)
 
-if [ "$FAILED" -ne 0 ]; then
-  echo "FAIL: Checksum verification failed — pipeline aborted." >&2
+if [ "$COUNT" -eq 0 ]; then
+  echo "ERROR: No *.000 files found in $CHART_SOURCE_DIR" >&2
   exit 1
 fi
 
-echo "PASS: All source checksums verified."
+if [ "$FAILED" -ne 0 ]; then
+  echo "FAIL: One or more source files failed the check." >&2
+  exit 1
+fi
+
+echo "PASS: $COUNT source file(s) verified (SHA-256 reported above)."

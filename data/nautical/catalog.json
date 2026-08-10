@@ -1,0 +1,83 @@
+{
+  "catalogVersion": 1,
+  "builtAt": "2026-08-10T09:47:11.300Z",
+  "totalCells": 2,
+  "passCells": 2,
+  "failCells": 0,
+  "depthDatum": "Approximate LAT",
+  "depthDatumStatus": "VERIFIED_FROM_OFFICIAL_DOCUMENTATION",
+  "napIdentityStatus": "UNVERIFIED",
+  "disclaimers": [
+    "Charted depths are not real-time water depth",
+    "Not for navigation",
+    "Depths reference Approximate LAT — not chart datum at your location"
+  ],
+  "cells": [
+    {
+      "cellId": "1R76W8LI",
+      "sourceSha256": "1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea",
+      "pipelineRunId": "2026-08-10T09:47:04Z-d6abe2d2",
+      "validatedAt": "2026-08-10T09:47:04.392Z",
+      "validationStatus": "PASS",
+      "edition": "78",
+      "issueDate": "20260617",
+      "updateApplicationDate": "20260617",
+      "producer": 7979,
+      "vdat": 24,
+      "sdat": 42,
+      "depthDatum": "Approximate LAT",
+      "depthDatumStatus": "VERIFIED_FROM_OFFICIAL_DOCUMENTATION",
+      "bbox": {
+        "minLon": 4.1333333,
+        "minLat": 51.575,
+        "maxLon": 4.2149546,
+        "maxLat": 51.625
+      },
+      "featureCounts": {
+        "navigation-marks": 28,
+        "depth-areas": 532,
+        "depth-contours": 528,
+        "soundings": 757
+      },
+      "files": {
+        "navigation-marks": "cells/1R76W8LI/navigation-marks.geojson",
+        "depth-areas": "cells/1R76W8LI/depth-areas.geojson",
+        "depth-contours": "cells/1R76W8LI/depth-contours.geojson",
+        "soundings": "cells/1R76W8LI/soundings.geojson"
+      }
+    },
+    {
+      "cellId": "1R7788RI",
+      "sourceSha256": "cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b",
+      "pipelineRunId": "2026-08-10T09:47:04Z-d6abe2d2",
+      "validatedAt": "2026-08-10T09:47:04.392Z",
+      "validationStatus": "PASS",
+      "edition": "46",
+      "issueDate": "20260629",
+      "updateApplicationDate": "20260629",
+      "producer": 7979,
+      "vdat": 24,
+      "sdat": 42,
+      "depthDatum": "Approximate LAT",
+      "depthDatumStatus": "VERIFIED_FROM_OFFICIAL_DOCUMENTATION",
+      "bbox": {
+        "minLon": 4.3333333,
+        "minLat": 51.645471,
+        "maxLon": 4.3914961,
+        "maxLat": 51.675
+      },
+      "featureCounts": {
+        "navigation-marks": 44,
+        "depth-areas": 393,
+        "depth-contours": 390,
+        "soundings": 1327
+      },
+      "files": {
+        "navigation-marks": "cells/1R7788RI/navigation-marks.geojson",
+        "depth-areas": "cells/1R7788RI/depth-areas.geojson",
+        "depth-contours": "cells/1R7788RI/depth-contours.geojson",
+        "soundings": "cells/1R7788RI/soundings.geojson"
+      }
+    }
+  ]
+}

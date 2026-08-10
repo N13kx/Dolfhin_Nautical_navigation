@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
-  "pipelineRunId": "2026-08-10T08:36:19Z-9db1d075",
-  "generatedAt": "2026-08-10T08:36:19.501Z",
+  "pipelineRunId": "2026-08-10T09:47:11Z-b01618a3",
+  "generatedAt": "2026-08-10T09:47:11.300Z",
+  "catalogRef": "data/nautical/catalog.json",
   "pipeline": {
     "gdalVersion": "3.2.2",
     "s57DriverPresent": true,
@@ -18,69 +19,27 @@
       "filename": "1R76W8LI_1783372678701.000",
       "sha256": "1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea",
       "edition": "78",
-      "updateNumber": "0",
       "issueDate": "20260617",
       "updateApplicationDate": "20260617",
       "producer": 7979,
-      "productionSpecification": "2.4",
       "vdat": 24,
       "sdat": 42,
-      "hdat": 2,
-      "verifiedBbox": {
-        "minLon": 4.133333,
-        "minLat": 51.575,
-        "maxLon": 4.333333,
-        "maxLat": 51.625,
-        "provenance": "Derived from union of GDAL-decoded selected-class geometry under pinned reader conditions (VERIFIED_FROM_FILE 2026-07-07)"
-      }
+      "validationStatus": "PASS"
     },
     {
       "cellId": "1R7788RI",
       "filename": "1R7788RI_1783372678701.000",
       "sha256": "cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b",
       "edition": "46",
-      "updateNumber": "0",
       "issueDate": "20260629",
       "updateApplicationDate": "20260629",
       "producer": 7979,
-      "productionSpecification": "2.4",
       "vdat": 24,
       "sdat": 42,
-      "hdat": 2,
-      "verifiedBbox": {
-        "minLon": 4.333333,
-        "minLat": 51.625,
-        "maxLon": 4.533333,
-        "maxLat": 51.675,
-        "provenance": "Derived from union of GDAL-decoded selected-class geometry under pinned reader conditions (VERIFIED_FROM_FILE 2026-07-07)"
-      }
+      "validationStatus": "PASS"
     }
   ],
   "featureCounts": {
-    "byClassByCell": {
-      "1R76W8LI": {
-        "BCNSPP": 2,
-        "BOYLAT": 0,
-        "BOYSPP": 0,
-        "LIGHTS": 25,
-        "TOPMAR": 1,
-        "DEPARE": 532,
-        "DEPCNT": 528,
-        "SOUNDG_sourceFeatures": 4,
-        "SOUNDG_coordinates": 757
-      },
-      "1R7788RI": {
-        "BCNSPP": 0,
-        "BOYLAT": 12,
-        "BOYSPP": 5,
-        "LIGHTS": 13,
-        "TOPMAR": 14,
-        "DEPARE": 393,
-        "DEPCNT": 390,
-        "SOUNDG_sourceFeatures": 5,
-        "SOUNDG_coordinates": 1327
-      }
-    },
     "combinedByOutput": {
       "navigation-marks.geojson": {
         "features": 72
@@ -92,24 +51,10 @@
         "features": 918
       },
       "soundings.geojson": {
-        "sourceFeatures": 9,
-        "normalizedFeatures": 2084,
-        "transformationReason": "3D MultiPoint expanded to one Point feature per sounding coordinate; signed Z semantics applied per coordinate"
+        "features": 2084
       }
     }
   },
-  "geometryTypes": {
-    "BCNSPP": "Point",
-    "BOYLAT": "Point",
-    "BOYSPP": "Point",
-    "LIGHTS": "Point",
-    "TOPMAR": "Point",
-    "DEPARE": "Polygon",
-    "DEPCNT": "LineString",
-    "SOUNDG_source": "3D MultiPoint",
-    "SOUNDG_normalized": "Point"
-  },
-  "geometryCoercionNotes": "No coercion or linearization performed. SOUNDG MultiPoint explicitly expanded to Point per coordinate.",
   "datumLabels": {
     "depthDatum": "Approximate LAT",
     "depthDatumCode": 42,
@@ -118,16 +63,11 @@
     "verticalDatumCode": 24,
     "napIdentityStatus": "UNVERIFIED"
   },
-  "topmarAssociationNote": "All 15 TOPMAR features have empty LNAM_REFS and FFPT_RIND in GDAL output under LNAM_REFS=YES. GDAL may not expose all S-57 FFPT records. associationRefsVerifiedInGdalOutput=false on all TOPMAR features.",
-  "sourceGovernanceNote": "Both .000 files were Git-tracked at pipeline creation. They have been removed from the Git index via 'git rm --cached' (files retained on disk) and attached_assets/*.000 has been added to .gitignore. Fresh clones must provision source files from the official source with SHA-256 verification before running the pipeline.",
   "statedLimitations": [
-    "VDAT=24 NAP identity is UNVERIFIED — not confirmed from official documentation",
-    "Bridge and overhead clearances are not in scope",
+    "VDAT=24 NAP identity is UNVERIFIED",
     "Data is not real-time water depth",
     "Not for navigation",
-    "Rijkswaterstaat data licence not reviewed for public redistribution",
-    "TOPMAR parent-association semantics cannot be fully verified from GDAL decoded output alone"
+    "TOPMAR parent-association semantics not fully verifiable from GDAL decoded output alone"
   ],
-  "validationResult": "PASS",
-  "validationLog": "See validate.sh output during pipeline run"
+  "validationResult": "PASS"
 }

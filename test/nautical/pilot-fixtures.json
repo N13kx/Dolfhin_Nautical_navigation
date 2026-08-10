@@ -1,0 +1,25 @@
+{
+  "_comment": "Exact regression counts for the two Rijkswaterstaat pilot IENC cells. These are HARD validation gates — failures are never demoted to warnings. Do NOT apply these counts to other cells. Update only after a deliberate re-survey of the cell with GDAL 3.2.2 under the pinned open options.",
+  "1R76W8LI": {
+    "nav_beacon-special": 2,
+    "nav_buoy-lateral": 0,
+    "nav_buoy-special": 0,
+    "nav_light": 25,
+    "nav_topmark": 1,
+    "DEPARE": 532,
+    "DEPCNT": 528,
+    "SOUNDG_sourceFeatures": 4,
+    "SOUNDG_coordinates": 757
+  },
+  "1R7788RI": {
+    "nav_beacon-special": 0,
+    "nav_buoy-lateral": 12,
+    "nav_buoy-special": 5,
+    "nav_light": 13,
+    "nav_topmark": 14,
+    "DEPARE": 393,
+    "DEPCNT": 390,
+    "SOUNDG_sourceFeatures": 5,
+    "SOUNDG_coordinates": 1327
+  }
+}
