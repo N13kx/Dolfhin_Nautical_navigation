@@ -1,0 +1,91 @@
+DOL-013 PRE-IMPLEMENTATION AUDIT — READ ONLY
+
+Goal:
+Determine the minimum changes required to generalize the existing validated
+two-cell IENC pipeline into a generic multi-cell Dolphin Chart Builder.
+
+IMPORTANT:
+READ ONLY.
+Do not edit files.
+Do not install packages.
+Do not process the full Zeeland/NL dataset.
+Do not modify frontend code.
+Keep Agent usage minimal.
+
+1. Report:
+   - current branch
+   - HEAD SHA
+   - git status
+   - whether commits 1de468f and 37cecb3 are ancestors of HEAD
+
+2. Inspect only the existing nautical pipeline files needed to answer:
+   - where the two pilot cell IDs are hardcoded
+   - where their filenames/checksums are hardcoded
+   - where exact pilot feature counts are hardcoded
+   - where combined four-file output is assumed
+   - where publishing assumes exactly five global files
+   - how metadata extraction currently determines cellId
+   - whether normalization can already operate per cell internally
+
+3. Propose the SMALLEST refactor that supports:
+
+   chart-source/*.000
+          ↓
+   automatic cell discovery
+          ↓
+   per-cell checksum
+          ↓
+   per-cell extract
+          ↓
+   per-cell normalize
+          ↓
+   per-cell validation
+          ↓
+   cells/<cellId>/
+          ↓
+   catalog.json
+
+4. Separate validation into:
+
+   A. universal safety invariants
+   B. pilot regression fixtures
+
+   Existing exact counts for 1R76W8LI and 1R7788RI must remain available
+   as regression fixtures, but must not be applied to unrelated cells.
+
+5. Investigate an incremental-build design:
+   unchanged SHA-256 = skip processing;
+   changed/new source = process and validate;
+   failed cell = never publish as PASS.
+
+6. Preserve these binding safety semantics:
+
+   - raw source remains immutable
+   - provenance retained
+   - official/community separation retained
+   - SOUNDG original signed Z retained
+   - Z > 0 = charted depth below datum
+   - Z < 0 = drying height above datum
+   - Z = 0 = at datum
+   - never abs() during normalization
+   - SDAT 42 = Approximate LAT
+   - VDAT 24 = Local Datum
+   - NAP identity remains UNVERIFIED
+   - never invent missing nautical metadata
+
+7. Environment:
+   identify the smallest reproducible solution for the GDAL/S57 dependency.
+   Do NOT install anything during this audit.
+
+8. Return:
+   - files that actually need modification
+   - proposed directory structure
+   - proposed catalog schema
+   - proposed incremental-build algorithm
+   - existing code that can be reused unchanged
+   - migration risks
+   - estimated implementation scope
+   - GO / NO-GO recommendation
+
+STOP after the report.
+Do not implement DOL-013.
