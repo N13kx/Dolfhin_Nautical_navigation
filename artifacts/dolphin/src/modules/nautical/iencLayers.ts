@@ -414,9 +414,11 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     //
     // DISPLAY MODEL:
     //   Only relation === "below" features are portrayed as depth labels.
-    //   chartedValueMetres is negative for below-datum soundings (e.g. -2.9).
-    //   The label shows the positive magnitude: abs(chartedValueMetres) → "2.9".
-    //   The stored signed value is never mutated. No "*" suffix.
+    //   chartedValueMetres is POSITIVE for below-datum soundings (e.g. +2.9).
+    //   S-57 contract: Z > 0 = charted depth below datum. Positive Z is stored
+    //   as-is. abs() in the text-field expression is defensive and no-op for
+    //   well-formed below-datum data. Stored signed value is never mutated.
+    //   No "*" suffix.
     //
     //   relation === "above" (drying heights) and "at" are NOT shown as depth
     //   labels. They remain in the data and are accessible via tap → sheet.
@@ -464,8 +466,8 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
         layout: {
           // Display positive magnitude of the stored signed value.
-          // chartedValueMetres is negative for below-datum (e.g. -2.9 → "2.9").
-          // abs() is applied here in the display formatter only — stored data unchanged.
+          // chartedValueMetres is positive for below-datum (e.g. +2.9 → "2.9").
+          // abs() is defensive (no-op for well-formed data); stored value unchanged.
           'text-field': [
             'to-string',
             ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],

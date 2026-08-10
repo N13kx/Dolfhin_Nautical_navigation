@@ -132,8 +132,8 @@ GDAL does not expose S-57 FFPT parent-association links for these features.
 Each MultiPoint SOUNDG feature is expanded to one Point per coordinate.
 - `chartedValueMetres`: raw Z value (sign preserved, never `abs()`)
 - `chartedValueRelationToDatum`:
-  - `"above"` — Z > 0 (drying feature, above chart datum)
-  - `"below"` — Z < 0 (charted depth below datum)
+  - `"below"` — Z > 0 (charted depth below chart datum; S-57 positive = navigable water depth)
+  - `"above"` — Z < 0 (drying height above chart datum; S-57 negative = exposed feature)
   - `"at"` — Z == 0
 
 ### pipelineFeatureId Algorithm

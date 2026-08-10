@@ -287,7 +287,13 @@ for (const cellId of CELLS) {
       const pid = getSoundgFeatureId(cellId, props, coordIdx);
       checkZ(z, pid);
 
-      const relation = z > 0 ? 'above' : z < 0 ? 'below' : 'at';
+      // S-57 sign convention (authoritative):
+      //   Z > 0 → charted depth BELOW chart datum  → relation = "below"
+      //   Z < 0 → drying height ABOVE chart datum  → relation = "above"
+      //   Z = 0 → at chart datum                   → relation = "at"
+      // chartedValueMetres stores the original signed Z unchanged.
+      // abs() must NEVER be applied here; it is display-only in the frontend.
+      const relation = z > 0 ? 'below' : z < 0 ? 'above' : 'at';
 
       const outProps = {
         chartedValueMetres: z,

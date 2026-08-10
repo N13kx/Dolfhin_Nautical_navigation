@@ -391,8 +391,18 @@ if (lnamDups === 0) ok('navigation-marks: no duplicate LNAMs within cell');
 else fail(`navigation-marks: ${lnamDups} duplicate LNAM(s)`);
 
 // ── (g) depthDatum and chartedValueRelationToDatum on all soundings ───────────
+//
+// S-57 sign convention (regression guard — must not be weakened):
+//   Z > 0 → relation MUST be "below"  (charted depth below chart datum)
+//   Z < 0 → relation MUST be "above"  (drying height above chart datum)
+//   Z = 0 → relation MUST be "at"     (at chart datum)
+//
 let sndMissingDatum = 0, sndMissingRelation = 0;
 let sndAbove = 0, sndBelow = 0, sndAt = 0;
+// Regression counters: each tracks a specific sign-vs-relation mismatch.
+let sndSignMismatch_posNotBelow = 0;  // Z>0 but relation !== "below"
+let sndSignMismatch_negNotAbove = 0;  // Z<0 but relation !== "above"
+let sndSignMismatch_zeroNotAt   = 0;  // Z==0 but relation !== "at"
 const sndZByCell = {};
 for (const feat of sndFc.features || []) {
   const props = feat.properties || {};
@@ -407,12 +417,23 @@ for (const feat of sndFc.features || []) {
   if (z !== null && z !== undefined) {
     if (!sndZByCell[cellId]) sndZByCell[cellId] = [];
     sndZByCell[cellId].push(z);
+    // Regression check: sign must match relation per S-57 contract.
+    if (z > 0 && rel !== 'below') sndSignMismatch_posNotBelow++;
+    if (z < 0 && rel !== 'above') sndSignMismatch_negNotAbove++;
+    if (z === 0 && rel !== 'at')  sndSignMismatch_zeroNotAt++;
   }
 }
 if (sndMissingDatum === 0) ok('soundings: depthDatum present on all features');
 else fail(`soundings: depthDatum missing on ${sndMissingDatum} features`);
 if (sndMissingRelation === 0) ok('soundings: chartedValueRelationToDatum present on all features');
 else fail(`soundings: chartedValueRelationToDatum missing on ${sndMissingRelation} features`);
+// Regression gates — these will catch any re-introduction of the sign inversion.
+if (sndSignMismatch_posNotBelow === 0) ok('soundings: Z>0 → relation="below" on all features (S-57 sign check)');
+else fail(`soundings: S-57 sign inversion — ${sndSignMismatch_posNotBelow} features have Z>0 but relation!="below"`);
+if (sndSignMismatch_negNotAbove === 0) ok('soundings: Z<0 → relation="above" on all features (S-57 sign check)');
+else fail(`soundings: S-57 sign inversion — ${sndSignMismatch_negNotAbove} features have Z<0 but relation!="above"`);
+if (sndSignMismatch_zeroNotAt === 0) ok('soundings: Z=0 → relation="at" on all features (S-57 sign check)');
+else fail(`soundings: S-57 sign inversion — ${sndSignMismatch_zeroNotAt} features have Z=0 but relation!="at"`);
 
 // ── (h) depthDatum on depth-areas and depth-contours ─────────────────────────
 for (const [fname, fc] of [['depth-areas.geojson', depFc], ['depth-contours.geojson', cntFc]]) {
@@ -458,10 +479,11 @@ for (const [filename, filePath, fc] of allFilesFeatures) {
 }
 
 // ── SOUNDG signed distribution summary (informational) ───────────────────────
+// S-57 contract: Z>0 = below datum (charted depth), Z<0 = above datum (drying height)
 console.log(`\n  SOUNDG signed distribution:`);
-console.log(`    above (Z>0, drying): ${sndAbove}`);
-console.log(`    below (Z<0, depth):  ${sndBelow}`);
-console.log(`    at    (Z==0):        ${sndAt}`);
+console.log(`    below (Z>0, charted depth):  ${sndBelow}`);
+console.log(`    above (Z<0, drying height):  ${sndAbove}`);
+console.log(`    at    (Z==0):                ${sndAt}`);
 for (const cellId of ['1R76W8LI', '1R7788RI']) {
   const zs = sndZByCell[cellId] || [];
   if (zs.length > 0) {

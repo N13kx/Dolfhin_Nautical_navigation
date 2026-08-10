@@ -66,7 +66,9 @@ function resolveChartedValue(props: Record<string, unknown>): ChartedValueResult
     };
   }
   if (relation === 'above' && rawValue !== undefined && rawValue !== null) {
-    const metres = Number(rawValue);
+    // After pipeline fix: chartedValueMetres is negative for drying heights (Z<0 in S-57).
+    // Display the positive magnitude — the stored signed value is NOT changed.
+    const metres = Math.abs(Number(rawValue));
     return {
       label: 'Drooghoogte',
       value: `${metres.toFixed(1)} m boven kaartdatum`,

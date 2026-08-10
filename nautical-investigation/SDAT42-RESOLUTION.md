@@ -202,7 +202,7 @@ From DATUM-RESOLUTION.md, depth display requires six conditions to be cleared:
 | 2 | Depth unit is confirmed | CLEARED | CLEARED — metres (DUNI=1) |
 | 3 | Horizontal CRS is confirmed | CLEARED | CLEARED — WGS84 |
 | 4 | Encoding scale factors are confirmed | CLEARED | CLEARED — COMF/SOMF applied by GDAL |
-| 5 | Z-sign convention is confirmed | CLEARED | CLEARED — negative = below datum |
+| 5 | Z-sign convention is confirmed | CLEARED | CLEARED — positive = below datum (charted depth); negative = above datum (drying height) [corrected per DOL-012] |
 | 6 | No contradictory spatial datum overrides | CLEARED | CLEARED — no m_sdat objects in either cell |
 
 All six conditions are now met.
@@ -221,7 +221,7 @@ DEPTH DISPLAY CLEARED FOR PROTOTYPE
 
 2. **"Approximate" qualifier.** LAT approximation typically introduces sub-decimetre bias (conservative — slightly shallower than rigorous LAT). This is within normal charting tolerance and does not affect prototype display.
 
-3. **RI cell sounding sign.** As established in DATUM-RESOLUTION.md §6: RI cell SOUNDG Z-values (+0.9 to +10.0 m) are positive = features **above** chart datum (shoals/banks/drying features), not navigable depth. Depth labels in the RI cell describe drying heights. The Approximate LAT datum is correctly referenced for these values; a mariner display should render them as drying features, not charted depths.
+3. **RI cell sounding sign (corrected per DOL-012).** RI cell SOUNDG Z-values (+0.9 to +10.0 m) are positive = charted navigable depths **below** chart datum, consistent with a deep waterway. An earlier version of this document incorrectly stated these were features above datum. Per the authoritative S-57 convention: positive Z = below datum (charted depth); negative Z = above datum (drying height). The Approximate LAT datum is correctly referenced.
 
 `VERIFIED_FROM_FILE` — cell 1R7788RI SOUNDG layer Z-range, REPORT.md §5.
 

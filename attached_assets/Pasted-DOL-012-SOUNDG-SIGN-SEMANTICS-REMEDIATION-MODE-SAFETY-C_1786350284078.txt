@@ -1,0 +1,395 @@
+DOL-012 — SOUNDG SIGN SEMANTICS REMEDIATION
+
+MODE:
+SAFETY-CRITICAL INVESTIGATION + IMPLEMENTATION.
+
+Work only on the current branch:
+
+feature/v0.2.1b-official-ienc-integration
+
+Do not merge.
+Do not ingest Zeeland cells.
+Do not work on navigation-mark portrayal.
+Do not modify GPS, SOG/COG, follow mode, Settings, vessel profile,
+search, themes, units, Satellite/Hybrid lifecycle, or unrelated UI.
+
+CRITICAL:
+This task corrects potentially inverted SOUNDG sign semantics.
+
+Do not simply flip the UI.
+First prove the raw/GDAL semantics, then fix the data pipeline,
+re-run validation, republish, and only then update the frontend portrayal.
+
+==================================================
+AUTHORITATIVE SEMANTIC CONTRACT
+==================================================
+
+For S-57 sounding values relative to chart datum:
+
+positive sounding value:
+charted depth BELOW chart datum
+
+zero:
+at chart datum
+
+negative sounding value:
+drying height ABOVE chart datum
+
+Example:
+
++2.0 = charted depth 2.0 m below chart datum
+ 0.0 = at chart datum
+-2.0 = drying height 2.0 m above chart datum
+
+The signed source value must always be preserved.
+
+Do not convert stored values with abs().
+
+abs()/magnitude may only be used for human-readable presentation
+after relation-to-datum has already been correctly classified.
+
+==================================================
+1. PRE-FLIGHT — READ ONLY
+==================================================
+
+Before modifying anything, report:
+
+- current branch
+- HEAD
+- git status
+- GDAL version
+- S57 driver presence
+- current Task #7 SOUNDG normalization logic
+- current validation logic
+- current frontend SOUNDG filter/display logic
+
+Also inspect the existing processed and intermediate SOUNDG data.
+
+Report current counts for:
+
+Z > 0
+Z < 0
+Z = 0
+
+Do not change anything yet.
+
+==================================================
+2. RAW / GDAL SEMANTIC VERIFICATION
+==================================================
+
+Use the existing canonical source cells only:
+
+1R76W8LI
+1R7788RI
+
+Use the existing pinned GDAL 3.2.2 environment and the same reader options
+used by Task #7.
+
+Inspect representative SOUNDG coordinates from the GDAL-decoded intermediate:
+
+- at least 5 positive Z values
+- at least 5 negative Z values
+- zero values if present
+
+For each sample report:
+
+- sourceCellId
+- source feature RCID or equivalent identifier
+- coordinate index
+- raw decoded Z
+- current normalized relation
+- correct S-57 semantic relation under the contract above
+
+Do not infer a new sign convention from geography or visual appearance.
+
+The semantic contract above is authoritative.
+
+If the GDAL output cannot be connected clearly to the source SOUNDG geometry:
+ABORT and report the blocker.
+
+==================================================
+3. IDENTIFY THE CURRENT BUG
+==================================================
+
+Confirm whether the existing pipeline currently classifies:
+
+Z > 0 as "above"
+Z < 0 as "below"
+
+If yes, explicitly report:
+
+CURRENT IMPLEMENTATION IS INVERTED
+
+and continue with remediation.
+
+Do not hide or soften this finding.
+
+==================================================
+4. CORRECT NORMALIZATION
+==================================================
+
+Update the Task #7 SOUNDG normalization logic.
+
+Required exact mapping:
+
+if Z > 0:
+  chartedValueRelationToDatum = "below"
+
+if Z < 0:
+  chartedValueRelationToDatum = "above"
+
+if Z === 0:
+  chartedValueRelationToDatum = "at"
+
+chartedValueMetres must remain the original signed Z.
+
+Examples:
+
+Z = +2.9:
+chartedValueMetres = 2.9
+chartedValueRelationToDatum = "below"
+
+Z = -2.9:
+chartedValueMetres = -2.9
+chartedValueRelationToDatum = "above"
+
+Z = 0:
+chartedValueMetres = 0
+chartedValueRelationToDatum = "at"
+
+NEVER use abs() in normalization.
+
+==================================================
+5. CORRECT COMMENTS / DOCUMENTATION / VALIDATION
+==================================================
+
+Search the repository for any incorrect semantic statements such as:
+
+positive Z = above datum
+negative Z = below datum
+positive = drying
+negative = depth
+
+Correct only statements that describe SOUNDG sign semantics.
+
+Update validation so it explicitly checks:
+
+Z > 0 => relation "below"
+Z < 0 => relation "above"
+Z = 0 => relation "at"
+
+Add regression checks so this inversion cannot silently return.
+
+Do not alter the underlying signed Z values.
+
+==================================================
+6. RE-RUN THE COMPLETE PIPELINE
+==================================================
+
+Run the full existing Task #7 pipeline in its canonical order:
+
+1. verify-checksums.sh
+2. extract-metadata.sh
+3. extract-raw.sh
+4. normalize.sh
+5. validate.sh
+6. write-manifests.sh
+7. publish.sh
+
+Do not skip stages.
+
+Do not weaken any existing validation.
+
+Do not fabricate metadata.
+
+If any stage fails:
+STOP.
+Do not publish partially corrected data.
+
+==================================================
+7. EXPECTED SIGN DISTRIBUTION — VERIFY, DO NOT ASSUME
+==================================================
+
+Previous raw signed counts were reported as:
+
+positive Z: 1612
+negative Z: 468
+zero Z: 4
+
+If those raw counts remain unchanged after the rerun, the corrected relation
+distribution should logically become:
+
+below / charted depth: 1612
+above / drying height: 468
+at: 4
+
+BUT:
+
+Do not hardcode or report these as PASS merely because they are expected.
+
+Calculate them again from the regenerated output and report the actual values.
+
+==================================================
+8. FRONTEND SOUNDING PORTRAYAL
+==================================================
+
+Only after the corrected pipeline has validated and published successfully,
+update the frontend portrayal.
+
+Normal charted-depth labels:
+
+filter:
+chartedValueRelationToDatum === "below"
+
+For below:
+
+stored +2.0
+display "2.0"
+
+Do not prefix a plus sign.
+
+For above / drying height:
+
+stored -2.0
+
+Do not display it as ordinary navigable depth among normal sounding labels.
+
+Keep it available to the detail interaction.
+
+Detail sheet wording:
+
+below:
+"Gepeilde diepte"
+"2,0 m onder Approximate LAT"
+
+above:
+"Drooghoogte"
+"2,0 m boven kaartdatum"
+
+at:
+"Op kaartdatum"
+"0,0 m"
+
+IMPORTANT:
+
+For an "above" feature, displaying the magnitude 2.0 in prose is allowed,
+but the stored value must remain -2.0.
+
+Never call it current depth.
+Never call it safe depth.
+Never claim current water level.
+
+==================================================
+9. CURRENT DEPTH DENSITY BEHAVIOR
+==================================================
+
+Preserve the currently accepted progressive depth-label density from DOL-011
+unless a change is strictly required because the filter relation reverses.
+
+Do not redesign the density strategy in this task.
+
+The expected visible label population will increase substantially because
+the eligible "below" set may change from 468 to approximately 1612.
+
+Because of that:
+
+- preserve collision handling
+- check that map rendering remains responsive
+- report if the increased eligible set makes the current zoom density too crowded
+
+Do not prematurely redesign it unless necessary for build/runtime correctness.
+
+==================================================
+10. DATUM TRUTH
+==================================================
+
+Keep the existing datum truth exactly:
+
+SDAT = 42
+label = "Approximate LAT"
+status = VERIFIED_FROM_OFFICIAL_DOCUMENTATION
+
+VDAT = 24
+label = "Local Datum"
+
+NAP identity = UNVERIFIED
+
+Do not convert Approximate LAT to NAP.
+Do not claim NAP equivalence.
+
+"Chart datum" is a reference level, not a unit.
+The unit remains metres.
+
+==================================================
+11. AUTOMATED VALIDATION
+==================================================
+
+After regeneration, report:
+
+- total SOUNDG normalized points
+- positive signed values
+- negative signed values
+- zero signed values
+- relation="below" count
+- relation="above" count
+- relation="at" count
+- zero mismatches between sign and relation
+- pipeline validation result
+- public manifest validation.status
+- new pipelineRunId
+
+Also run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+
+pnpm --filter @workspace/dolphin build
+
+==================================================
+12. GIT DISCIPLINE
+==================================================
+
+Do not merge to main.
+
+Commit the remediation on the current feature branch.
+
+Before commit report all files changed.
+
+Do not push unless the authenticated push mechanism is already available.
+Do not request a Personal Access Token.
+
+If push is unavailable:
+leave the commit local and report the exact commit SHA.
+
+==================================================
+13. FINAL REPORT
+==================================================
+
+Return:
+
+1. pre-flight branch / HEAD / status
+2. exact previous faulty semantic logic
+3. raw/GDAL sample evidence
+4. files modified
+5. corrected normalization rule
+6. validation changes
+7. documentation/comments corrected
+8. regenerated positive / negative / zero counts
+9. corrected below / above / at counts
+10. confirmation signed source values were preserved
+11. pipeline execution result by stage
+12. public manifest result and pipelineRunId
+13. frontend display behavior:
+    - +2.0
+    - -2.0
+    - 0.0
+14. TypeScript result
+15. build result
+16. performance/crowding observations after larger below-depth population
+17. commit SHA
+18. tests NOT manually executed
+19. blockers / deviations
+20. explicit recommendation for iPhone manual verification
+
+Do not mark this task DONE based only on build or pipeline PASS.
+
+Manual iPhone verification remains required.

@@ -477,13 +477,15 @@ VALDCO is the depth value for the contour line in metres. Observed contours at 1
 
 **EXPSOU=1:** "Least depth known" — `VERIFIED_FROM_OFFICIAL_DOCUMENTATION` — IHO S-57 Ed 3.1 Appendix B, attribute EXPSOU, value 1 = "Least depth known".
 
-**Geometry type:** 3D MultiPoint. Each feature is a grouped collection of soundings. Z-coordinate is the decoded sounding depth in metres (SOMF applied by GDAL). Sign convention: negative Z = below sounding datum, positive Z = above.
+**Geometry type:** 3D MultiPoint. Each feature is a grouped collection of soundings. Z-coordinate is the decoded sounding depth in metres (SOMF applied by GDAL). Sign convention (authoritative S-57, corrected per DOL-012): positive Z = charted depth below sounding datum; negative Z = drying height above sounding datum.
 
-**Example sounding values from LI:** Z values: −3.6, −2.9, −2.6, −2.3, −2.2, −2.0, −1.9, −1.5, −1.2, −1.0, −0.7 (below datum), and +0.5, +0.6, +0.7, +0.8 (above datum, i.e. potentially dry at chart datum)
+**Example sounding values from LI:** Z values: −3.6, −2.9, −2.6, −2.3, −2.2, −2.0, −1.9, −1.5, −1.2, −1.0, −0.7 (drying heights above datum — exposed at chart datum), and +0.5, +0.6, +0.7, +0.8 (shallow charted depths below datum)
 
-**Example sounding values from RI:** Z values: +0.9, +1.6, +7.4, +1.1, +1.3, +4.1, +4.2, +4.4, +5.1, +5.4, +5.7, +6.0, +6.7, +10.0 (all positive — deeper waterway)
+**Example sounding values from RI:** Z values: +0.9, +1.6, +7.4, +1.1, +1.3, +4.1, +4.2, +4.4, +5.1, +5.4, +5.7, +6.0, +6.7, +10.0 (all positive — charted navigable depths below datum)
 
-**Interpretation:** RI soundings show consistently deeper water (1–10m above sounding datum) consistent with navigable waterway. LI shows shallower, more variable water with areas both above and below datum. `INFERRED`
+**Interpretation (corrected):** RI soundings show consistently deep navigable water (1–10 m below sounding datum). LI shows shallower navigable areas (+0.5 to +0.8 m below datum) and intertidal drying features (−0.7 to −3.6 m, i.e. exposed 0.7–3.6 m above datum at chart datum). `INFERRED`
+
+**Note:** An earlier version of this document stated the opposite sign convention. That was incorrect and is the root cause of the DOL-012 pipeline remediation.
 
 **SCAMIN values:** Soundings have scale minimum visibility values (30000, 60000, 120000, 240000) indicating appropriate display zoom range. `VERIFIED_FROM_FILE`
 
