@@ -11,7 +11,8 @@
  *   - verifies filename-derived cellId against DSID_DSNM from metadata (if available)
  *
  * Cache statuses:
- *   FULL_PASS        — cell-manifest.json PASS + SHA match + all 4 output files present
+ *   FULL_PASS        — cell-manifest.json PASS + SHA and cache-schema match
+ *                      + all 4 output files present
  *                      → safe to skip ALL processing stages
  *   INTERMEDIATE_HIT — intermediate/<cellId>/ complete + SHA match, but no PASS cell output
  *                      → safe to skip GDAL extraction; run normalize + validate
@@ -26,6 +27,7 @@ const crypto = require('crypto');
 
 const CLASSES      = ['BCNSPP', 'BOYLAT', 'BOYSPP', 'LIGHTS', 'TOPMAR', 'DEPARE', 'DEPCNT', 'SOUNDG'];
 const OUTPUT_FILES = ['navigation-marks.geojson', 'depth-areas.geojson', 'depth-contours.geojson', 'soundings.geojson'];
+const PIPELINE_SCHEMA_VERSION = 1;
 
 function sha256File(filePath) {
   const data = fs.readFileSync(filePath);
@@ -102,7 +104,8 @@ function discoverCells(rootDir) {
         cachedManifest = JSON.parse(fs.readFileSync(cellManifestPath, 'utf8'));
         if (
           cachedManifest.sourceSha256 === sha256 &&
-          cachedManifest.validationStatus === 'PASS'
+          cachedManifest.validationStatus === 'PASS' &&
+          cachedManifest.pipelineSchemaVersion === PIPELINE_SCHEMA_VERSION
         ) {
           cellOutputComplete = OUTPUT_FILES.every(
             f => fs.existsSync(path.join(cellDir, f))
@@ -179,4 +182,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { discoverCells };
+module.exports = { discoverCells, PIPELINE_SCHEMA_VERSION };

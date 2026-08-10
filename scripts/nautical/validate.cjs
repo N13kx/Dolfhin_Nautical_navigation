@@ -24,7 +24,7 @@
 const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { discoverCells } = require('./discover-cells.cjs');
+const { discoverCells, PIPELINE_SCHEMA_VERSION } = require('./discover-cells.cjs');
 
 // ── Geometry helpers (unchanged from Task #7) ─────────────────────────────────
 
@@ -145,7 +145,7 @@ function validateCellUniversal(cellId, cellDir) {
 
   for (const [filename, , fc] of allFiles) {
     const expectedGeomType = EXPECTED_GEOM_TYPES[filename];
-    let geomE=0, nanE=0, bannedE=0, provE=0, cellE=0, geomTypeE=0, pidMiss=0;
+    let geomE=0, nanE=0, bannedE=0, provE=0, sourceShaE=0, cellE=0, geomTypeE=0, pidMiss=0;
 
     for (const feat of fc.features || []) {
       const props  = feat.properties || {};
@@ -166,16 +166,21 @@ function validateCellUniversal(cellId, cellDir) {
       if (!cellId2)          { if (cellE < 3) errors.push(`Missing 'sourceCellId' in ${filename}: ${pid}`); cellE++; }
       if (geom.type !== expectedGeomType) { if (geomTypeE < 3) errors.push(`Geometry type mismatch in ${filename}: expected ${expectedGeomType}, got ${geom.type} for ${pid}`); geomTypeE++; }
       if (!props.pipelineFeatureId) pidMiss++;
-      // sourceChecksum or provenance.checksum must be present
-      const hasSrcHash = !!(props.sourceChecksum || (props.provenance && props.provenance.checksum));
-      // (for nav-marks, sourceChecksum is inside provenance)
-      // Allow either location
-      if (!hasSrcHash && !props.provenance) errors.push(`Missing source SHA in ${filename}: ${pid}`);
+      // A valid source SHA-256 must be present in either supported location.
+      const sourceChecksums = [props.sourceChecksum, props.provenance && props.provenance.checksum];
+      const hasSourceSha256 = sourceChecksums.some(value =>
+        typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
+      );
+      if (!hasSourceSha256) {
+        if (sourceShaE < 3) errors.push(`Missing or invalid source SHA-256 in ${filename}: ${pid}`);
+        sourceShaE++;
+      }
     }
 
     for (const [label, count] of [
       ['empty geometries', geomE], ['NaN/Infinity coords', nanE],
       ['banned field violations', bannedE], ['missing provenance', provE],
+      ['missing or invalid source SHA-256', sourceShaE],
       ['missing sourceCellId', cellE], ['geometry type mismatches', geomTypeE],
       ['missing pipelineFeatureId', pidMiss],
     ]) {
@@ -457,6 +462,7 @@ for (const cell of cells) {
     cellId:                 cell.cellId,
     sourceFilename:         cell.filename,
     sourceSha256:           cell.sha256,
+    pipelineSchemaVersion:     PIPELINE_SCHEMA_VERSION,
     pipelineRunId,
     validatedAt,
     validationStatus:       cellStatus,
