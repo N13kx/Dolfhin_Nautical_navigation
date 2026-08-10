@@ -5,6 +5,7 @@
  * Called by build.sh for each DIRTY cell. Outputs metadata.json to intermediate/<cellId>/.
  *
  * Usage: node extract-metadata.cjs <rootDir> <cellId> <filename> <sha256> <gdalBin>
+ * filename may be a relative path below data/nautical/chart-source/.
  *
  * Derives and verifies cellId from DSID_DSNM in the extracted metadata.
  * FAILS the cell (exits non-zero) if filename-derived cellId conflicts with
@@ -55,10 +56,17 @@ if (!rootDir || !cellId || !filename || !sha256 || !gdalBin) {
   process.exit(1);
 }
 
-const assetsDir     = path.join(rootDir, 'data', 'nautical', 'chart-source');
+const assetsDir       = path.join(rootDir, 'data', 'nautical', 'chart-source');
 const intermediateDir = path.join(rootDir, 'data', 'nautical', 'intermediate');
 
-const srcPath = path.join(assetsDir, filename);
+// filename is intentionally allowed to contain subdirectories below chart-source/.
+// Folder names are organisational only and are never used as nautical metadata.
+const srcPath = path.resolve(assetsDir, filename);
+const assetsRoot = path.resolve(assetsDir) + path.sep;
+if (!srcPath.startsWith(assetsRoot)) {
+  process.stderr.write(`ERROR: Source path escapes chart-source: ${filename}\n`);
+  process.exit(1);
+}
 if (!fs.existsSync(srcPath)) {
   process.stderr.write(`ERROR: Source file not found: ${srcPath}\n`);
   process.exit(1);
@@ -73,7 +81,8 @@ const dsidProps = extractLayerProps(gdalBin, srcPath, 'DSID');
 
 const metadata = {
   sourceCellId:   cellId,
-  sourceFilename: filename,
+  sourceFilename: path.basename(filename),
+  sourceRelativePath: filename,
   sourceChecksum: sha256,
 };
 
