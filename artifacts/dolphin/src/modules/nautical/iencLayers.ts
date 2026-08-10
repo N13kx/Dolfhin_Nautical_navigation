@@ -161,8 +161,17 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       groupId: 'charted-depths',
     },
 
-    // ── Soundings (SOUNDG — individual Point features) ───────────────
-    // Coloured by chartedValueRelationToDatum.
+    // ── Soundings — transparent hit-target circle (SOUNDG) ───────────
+    //
+    // PURPOSE: interaction only, not visual portrayal.
+    // The colored dot portrayal has been replaced by progressive depth labels
+    // (see ienc-soundings-label below). This circle layer remains at opacity 0
+    // so that NauticalObjectSheet tap interaction continues to work via
+    // queryRenderedFeatures — MapLibre hit-tests transparent circles at their
+    // full paint radius even when opacity is 0.
+    //
+    // All three relations (below / above / at) are kept in the hit-target
+    // so that tapping any sounding opens the detail sheet.
     {
       sourceId: 'ienc-soundings-source',
       source: {
@@ -176,30 +185,44 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         source: 'ienc-soundings-source',
         minzoom: 10,
         paint: {
+          // Generous hit radius at all zoom levels; fully transparent.
           'circle-radius': [
             'interpolate', ['linear'], ['zoom'],
-            10, 2.5,
-            14, 4.5,
+            10, 8,
+            16, 12,
           ],
-          'circle-color': [
-            'match', ['get', 'chartedValueRelationToDatum'],
-            'below', '#44b4d4',  // submerged — blue
-            'above', '#f5a623',  // drying height — amber
-            'at',    '#9b59b6',  // at datum — purple
-            /* default */ '#888888',
-          ],
-          'circle-opacity': 0.85,
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 0.8,
+          'circle-opacity': 0,
+          'circle-stroke-width': 0,
         },
       },
       groupId: 'charted-depths',
     },
 
-    // ── Sounding depth labels (high zoom only) ───────────────────────
-    // Shows |chartedValueMetres| as a text label; shares the soundings source.
+    // ── Soundings — progressive charted-depth text labels ────────────
+    //
+    // DISPLAY MODEL:
+    //   Only relation === "below" features are portrayed as depth labels.
+    //   chartedValueMetres is negative for below-datum soundings (e.g. -2.9).
+    //   The label shows the positive magnitude: abs(chartedValueMetres) → "2.9".
+    //   The stored signed value is never mutated.
+    //
+    //   relation === "above" (drying heights) and "at" are NOT shown as depth
+    //   labels. They remain in the data and are accessible via tap → sheet.
+    //   They must never be implied to be navigable or safe depth.
+    //
+    // PROGRESSIVE DENSITY (zoom thresholds, documented):
+    //   zoom 10 — minzoom start; text-size 9px; MapLibre collision keeps only
+    //             well-separated labels → very sparse, representative soundings
+    //   zoom 12 — text-size 10px; more labels fit without colliding
+    //   zoom 14 — text-size 11px; dense — normal boating zoom
+    //   zoom 16 — text-size 12px; high-detail close zoom
+    //
+    // MapLibre symbol collision (text-allow-overlap: false) is the primary
+    // density control. Smaller text at low zoom means fewer labels fit in the
+    // viewport without overlapping — no random sampling, deterministic output.
+    // The same viewport + zoom always produces the same label set.
     {
-      sourceId: 'ienc-soundings-source', // reuses the same registered source
+      sourceId: 'ienc-soundings-source', // source already registered above
       source: {
         type: 'geojson' as const,
         data: `${b}nautical/soundings.geojson`, // applyOverlays guards against dup source
@@ -209,19 +232,39 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: IENC_LAYER_IDS.soundingsLabel,
         type: 'symbol' as const,
         source: 'ienc-soundings-source',
-        minzoom: 13,
+        minzoom: 10,
+        // Only below-datum soundings are displayed as charted-depth labels.
+        // above (drying height) and at are excluded from label portrayal.
+        filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
         layout: {
-          'text-field': ['to-string', ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]]],
-          'text-size': 10,
-          'text-offset': [0, 1.2],
-          'text-anchor': 'top' as const,
+          // Display positive magnitude of the stored signed value.
+          // chartedValueMetres is negative for below-datum (e.g. -2.9 → "2.9").
+          // abs() is applied here in the display formatter only — stored data unchanged.
+          'text-field': [
+            'to-string',
+            ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
+          ],
+          // Progressive text size drives collision-based density.
+          // Smaller text → fewer labels fit without overlapping → sparser at low zoom.
+          'text-size': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 9,
+            12, 10,
+            14, 11,
+            16, 12,
+          ],
+          'text-anchor': 'center' as const,
+          // Collision off: MapLibre places as many non-overlapping labels as possible.
+          // This is deterministic — same viewport + zoom → same label set.
           'text-allow-overlap': false,
           'text-ignore-placement': false,
+          // Allow label to be skipped if it would overlap (rather than force-placing).
+          'text-optional': true,
         },
         paint: {
-          'text-color': '#ffffff',
+          'text-color': '#c8e8f8',
           'text-halo-color': '#071820',
-          'text-halo-width': 1,
+          'text-halo-width': 1.2,
         },
       },
       groupId: 'charted-depths',
