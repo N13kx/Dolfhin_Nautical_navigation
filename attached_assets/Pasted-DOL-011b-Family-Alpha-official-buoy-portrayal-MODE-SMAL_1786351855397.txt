@@ -1,0 +1,178 @@
+DOL-011b — Family Alpha official buoy portrayal
+
+MODE:
+SMALL SCOPED IMPLEMENTATION.
+
+Budget is limited.
+Do NOT perform a broad repository audit.
+Do NOT rediscover known architecture.
+
+Work only on the current branch:
+feature/v0.2.1b-official-ienc-integration
+
+PRIMARY FILE:
+artifacts/dolphin/src/modules/nautical/iencLayers.ts
+
+Prefer modifying ONLY this file.
+
+Do not merge.
+Do not push.
+Do not change IENC pipeline data.
+Do not ingest new cells.
+Do not modify SOUNDG/depth semantics or density.
+Do not modify GPS, follow mode, Settings, vessel profile, search,
+themes, units, PWA, or map-mode lifecycle.
+
+CRITICAL:
+Satellite ↔ Hybrid shares the ESRI base and MUST NOT call setStyle.
+
+==================================================
+GOAL
+==================================================
+
+Replace the current generic official navigation-mark circles with
+simple recognizable nautical prototype symbols for the Family Alpha.
+
+Current pilot data contains:
+
+- 12 buoy-lateral
+- 5 buoy-special
+- 2 beacon-special
+- 38 lights
+- 15 topmarks (TOPMAR remains hidden)
+
+Do not add OpenSeaMap in this task.
+
+==================================================
+1. VERY SMALL DATA CHECK
+==================================================
+
+Inspect ONLY navigation-marks.geojson.
+
+For:
+- buoy-lateral
+- buoy-special
+- beacon-special
+
+report which verified values actually occur for:
+
+- CATLAM
+- COLOUR
+- BOYSHP
+- BCNSHP
+- OBJNAM
+
+Do not inspect unrelated classes or files.
+
+Do not invent the meaning of a missing or unclear code.
+
+If CATLAM/COLOUR is sufficient to distinguish lateral marks safely,
+use it.
+
+If not:
+use a neutral symbol.
+
+==================================================
+2. PORTRAYAL
+==================================================
+
+Replace generic circles for buoys/beacons with simple MapLibre-native
+nautical-looking prototype symbols.
+
+Desired appearance:
+
+- buoy-lateral:
+  recognizable buoy marker, using verified lateral category/colour only
+
+- buoy-special:
+  recognizable yellow/special-mark style only where verified by source data
+
+- beacon-special:
+  recognizable beacon marker, visually different from floating buoys
+
+- lights:
+  keep current restrained light portrayal for now
+  do not add complex light-characteristic portrayal
+
+Do NOT claim IHO S-52 compliance.
+
+No new icon package or external dependency.
+
+Prefer MapLibre circle/symbol expressions or simple existing primitives.
+
+Do not draw a specific nautical symbol if the source attributes do not
+support its meaning.
+
+==================================================
+3. TOPMAR
+==================================================
+
+TOPMAR remains excluded from visible portrayal.
+
+Do not independently render the 15 TOPMAR features.
+
+Reason remains:
+formal parent association is unresolved.
+
+==================================================
+4. LABELS
+==================================================
+
+Keep labels restrained.
+
+Do not display raw object-class codes.
+
+OBJNAM may remain visible only where it is useful and already verified.
+
+Do not clutter the map.
+
+==================================================
+5. OFFICIAL / COMMUNITY
+==================================================
+
+Official IENC remains:
+
+sourceKind: official
+official: true
+
+Do not touch or merge OpenSeaMap community seamarks.
+
+==================================================
+6. VALIDATION
+==================================================
+
+Run only:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+Do not perform extra audits unless one of these fails.
+
+Do not claim manual testing.
+
+==================================================
+7. FINAL REPORT
+==================================================
+
+Keep the report short.
+
+Return only:
+
+1. file(s) modified
+2. actual CATLAM/COLOUR/BOYSHP/BCNSHP values found
+3. symbol decision for:
+   - lateral buoy
+   - special buoy
+   - special beacon
+   - light
+4. any meaning deliberately NOT portrayed because it was unverified
+5. TOPMAR still hidden YES/NO
+6. TypeScript PASS/FAIL
+7. build PASS/FAIL
+8. manual iPhone checks required
+
+Commit locally with message:
+
+feat(nautical): improve official buoy portrayal for family alpha
+
+Do not push.
