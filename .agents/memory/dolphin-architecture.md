@@ -102,11 +102,28 @@ Deferred. 15/15 have associationRefsVerifiedInGdalOutput:false.
 4/15 spatially detached. Excluded via filter. Documented in ACCEPTANCE-TEST.md.
 
 ## Data invariants
-- Two cells only: 1R76W8LI (ed.78), 1R7788RI (ed.46). Both Rijkswaterstaat.
+- Pilot cells: 1R76W8LI (ed.78), 1R7788RI (ed.46). Both Rijkswaterstaat.
 - pipelineFeatureId format: `cellId/OBJCLASS/RCID/index` for soundings.
 - chartedValueMetres: signed (POSITIVE=below datum, NEGATIVE=above datum). Never mutate.
 - depthDatum: "Approximate LAT" (SDAT=42, VERIFIED).
 - verticalDatum: "Local Datum" (VDAT=24, NAP identity UNVERIFIED).
+
+## DOL-013 pipeline (committed afc1fd9)
+
+Generic incremental chart builder. Adding a new cell = drop .000 in chart-source/, re-run build.sh.
+Key files: scripts/nautical/build.sh (orchestrator), discover-cells.cjs (auto-discovery + cache logic).
+
+Cache levels: FULL_PASS → skip all; INTERMEDIATE_HIT → skip GDAL; DIRTY → GDAL 3.2.2 required.
+GDAL must be 3.2.2 exactly — any mismatch on DIRTY cell = BLOCKED (no fallback).
+Intermediate files persist across sessions; SHA-256 is the cache key (Node crypto, not shell util).
+
+Per-cell output lives in data/nautical/cells/<cellId>/. Flat processed/ files remain for frontend compat.
+Catalog: data/nautical/catalog.json (new arch). Public output: artifacts/dolphin/public/nautical/.
+Frontend still reads flat files — DOL-013b migration to catalog paths is a separate follow-up.
+
+Pilot fixtures are HARD failures: test/nautical/pilot-fixtures.json.
+Build 1 (INTERMEDIATE_HIT): 18/18 pilot checks PASS.
+Build 2 (FULL_PASS): all stages skipped, PASS.
 
 ## Push auth note
 GitHub HTTPS push requires a PAT. Ephemeral Nix GDAL also lost between sessions.
