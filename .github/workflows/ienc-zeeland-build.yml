@@ -23,19 +23,33 @@ jobs:
       options: --user 0
 
     steps:
-      - name: Install Git before checkout
+      - name: Install Git
         shell: bash
         run: |
           set -euo pipefail
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
           git --version
 
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/v0.2.1b-official-ienc-integration
-          fetch-depth: 0
+      - name: Checkout feature branch with Git metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH='feature/v0.2.1b-official-ienc-integration'
+
+          # Explicit checkout inside the mounted Actions workspace. This avoids
+          # actions/checkout archive fallback in the minimal GDAL container and
+          # guarantees that later publish steps have a real .git directory.
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags origin "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+
+          test -d .git
+          git rev-parse --is-inside-work-tree
+          git status --short
 
       - name: Install Node.js 24
         uses: actions/setup-node@v4
@@ -90,6 +104,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -d .git
+          git rev-parse --is-inside-work-tree
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
