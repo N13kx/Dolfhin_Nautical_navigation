@@ -1,0 +1,51 @@
+{
+  "sourceCatalog": "artifacts/dolphin/public/nautical/catalog.json",
+  "catalogBuiltAt": "2026-08-11T18:29:55.550Z",
+  "totalCells": 61,
+  "passCells": 61,
+  "sourceFeatureCounts": {
+    "navigation-marks": 3379,
+    "depth-areas": 46296,
+    "depth-contours": 46214,
+    "soundings": 435082
+  },
+  "sourceLayers": [
+    "navigation-marks",
+    "depth-areas",
+    "depth-contours",
+    "soundings"
+  ],
+  "propertyPolicy": {
+    "retained": [
+      "pipelineFeatureId",
+      "sourceCellId",
+      "sourceStableId",
+      "dolphinKind",
+      "rawObjectClass",
+      "chartedValueMetres",
+      "chartedValueRelationToDatum",
+      "depthDatum",
+      "depthDatumCode",
+      "depthDatumStatus",
+      "verticalDatum",
+      "verticalDatumCode",
+      "napIdentityStatus",
+      "sourceKind",
+      "official",
+      "DRVAL1",
+      "DRVAL2",
+      "VALDCO",
+      "CATLAM",
+      "OBJNAM",
+      "BOYSHP",
+      "BCNSHP",
+      "SCAMIN",
+      "COLOURPrimary"
+    ],
+    "omitted": [
+      "provenance (cell identity remains in sourceCellId; full audit stays in validated GeoJSON/manifests)",
+      "sourceProperties except CATLAM/OBJNAM/BOYSHP/BCNSHP/SCAMIN/COLOURPrimary",
+      "sourceChecksum (available through the validated cell manifest/catalog)"
+    ]
+  }
+}

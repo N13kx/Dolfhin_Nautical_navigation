@@ -1,3 +1,4 @@
 artifacts/dolphin/public/nautical/depth-areas.geojson filter=lfs diff=lfs merge=lfs -text
 artifacts/dolphin/public/nautical/depth-contours.geojson filter=lfs diff=lfs merge=lfs -text
 artifacts/dolphin/public/nautical/soundings.geojson filter=lfs diff=lfs merge=lfs -text
+artifacts/dolphin/public/nautical/dolphin-zeeland.pmtiles filter=lfs diff=lfs merge=lfs -text

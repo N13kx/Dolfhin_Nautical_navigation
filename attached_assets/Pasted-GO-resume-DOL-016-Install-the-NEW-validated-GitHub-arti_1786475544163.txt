@@ -1,0 +1,88 @@
+GO — resume DOL-016.
+
+Install the NEW validated GitHub artifact:
+
+Artifact ID:
+9113938180
+
+Do NOT use the older artifact 9103698912.
+
+Goal:
+Install the validated 61-cell Zeeland output including:
+nautical/dolphin-zeeland.pmtiles
+
+Rules:
+- Do NOT run GDAL.
+- Do NOT run scripts/nautical/build.sh.
+- Do NOT regenerate nautical data.
+- Do NOT modify frontend code.
+- Do NOT modify pipeline code.
+- Do NOT modify nautical semantics.
+- Do NOT push or merge anything.
+
+Steps:
+
+1. Use the existing GitHub artifact installer, but make sure artifact 9113938180 is selected.
+
+2. Preserve/backup the currently installed nautical directory before replacement.
+
+3. Install the newer validated artifact.
+
+4. Verify:
+   - totalCells = 61
+   - passCells = 61
+   - failCells = 0
+   - 1R76W8LI edition = 80
+   - cell directory count = 61
+   - missing catalog-referenced files = 0
+   - artifacts/dolphin/public/nautical/dolphin-zeeland.pmtiles exists
+   - PMTiles file size > 0
+
+5. Inspect the PMTiles archive and confirm these source layers exist:
+   - navigation-marks
+   - depth-areas
+   - depth-contours
+   - soundings
+
+If ANY validation fails:
+restore the backup and STOP.
+
+If everything passes:
+
+6. Activate the Replit Dolphin runtime with:
+
+VITE_IENC_SOURCE=pmtiles
+
+7. Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+8. Start/restart the Dolphin preview.
+
+9. Verify at runtime that Dolphin requests:
+
+dolphin-zeeland.pmtiles
+
+10. Verify the legacy 61-cell GeoJSON catalog is NOT being used as the active nautical map source.
+
+Do not silently fall back to GeoJSON if PMTiles fails.
+
+REPORT ONLY:
+
+- installed artifact ID
+- PMTiles filename/path
+- PMTiles filesize
+- catalog total/pass/fail
+- 1R76W8LI edition
+- cell directories
+- missing catalog files
+- PMTiles source layers
+- VITE_IENC_SOURCE effective value
+- PMTiles runtime request observed YES/NO
+- legacy GeoJSON active YES/NO
+- TypeScript PASS/FAIL
+- production build PASS/FAIL
+- preview started YES/NO
+- code changes made
+- git status
