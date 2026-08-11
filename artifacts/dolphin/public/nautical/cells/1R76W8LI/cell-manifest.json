@@ -1,13 +1,14 @@
 {
   "cellId": "1R76W8LI",
-  "sourceFilename": "1R76W8LI_1783372678701.000",
-  "sourceSha256": "1228405ba65ba70afec00c3b0ef5f459dd166a6df588805434383b3b731245ea",
-  "pipelineRunId": "2026-08-10T09:47:04Z-d6abe2d2",
-  "validatedAt": "2026-08-10T09:47:04.392Z",
+  "sourceFilename": "1R76W8LI.000",
+  "sourceSha256": "6884d44507300f492e313a7664b22c0631d6c4bcadb46aaac4021a3dad264b59",
+  "pipelineSchemaVersion": 1,
+  "pipelineRunId": "2026-08-11T13:44:01Z-090af157",
+  "validatedAt": "2026-08-11T13:44:01.764Z",
   "validationStatus": "PASS",
-  "edition": "78",
-  "issueDate": "20260617",
-  "updateApplicationDate": "20260617",
+  "edition": "80",
+  "issueDate": "20260721",
+  "updateApplicationDate": "20260721",
   "producer": 7979,
   "vdat": 24,
   "sdat": 42,
@@ -22,9 +23,9 @@
   },
   "featureCounts": {
     "navigation-marks": 28,
-    "depth-areas": 532,
-    "depth-contours": 528,
-    "soundings": 757
+    "depth-areas": 529,
+    "depth-contours": 524,
+    "soundings": 758
   },
   "validationErrors": []
 }

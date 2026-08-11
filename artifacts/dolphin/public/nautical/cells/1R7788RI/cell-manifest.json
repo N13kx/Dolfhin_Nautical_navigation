@@ -1,9 +1,10 @@
 {
   "cellId": "1R7788RI",
-  "sourceFilename": "1R7788RI_1783372678701.000",
+  "sourceFilename": "1R7788RI.000",
   "sourceSha256": "cbdea5755b9f53de9587e2fc4d441c52178484268b79c23084a307e3910da99b",
-  "pipelineRunId": "2026-08-10T09:47:04Z-d6abe2d2",
-  "validatedAt": "2026-08-10T09:47:04.392Z",
+  "pipelineSchemaVersion": 1,
+  "pipelineRunId": "2026-08-11T13:44:01Z-090af157",
+  "validatedAt": "2026-08-11T13:44:01.764Z",
   "validationStatus": "PASS",
   "edition": "46",
   "issueDate": "20260629",

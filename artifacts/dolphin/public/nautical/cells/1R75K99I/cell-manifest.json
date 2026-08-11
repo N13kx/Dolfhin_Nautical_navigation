@@ -1,0 +1,31 @@
+{
+  "cellId": "1R75K99I",
+  "sourceFilename": "1R75K99I.000",
+  "sourceSha256": "872124a48efd94d2659f6f42c46a9de87b6234c147b7a775ff104b1b1e6aca47",
+  "pipelineSchemaVersion": 1,
+  "pipelineRunId": "2026-08-11T13:44:01Z-090af157",
+  "validatedAt": "2026-08-11T13:44:01.764Z",
+  "validationStatus": "PASS",
+  "edition": "41",
+  "issueDate": "20260615",
+  "updateApplicationDate": "20260615",
+  "producer": 7979,
+  "vdat": 24,
+  "sdat": 42,
+  "depthDatum": "Approximate LAT",
+  "depthDatumStatus": "VERIFIED_FROM_OFFICIAL_DOCUMENTATION",
+  "napIdentityStatus": "UNVERIFIED",
+  "bbox": {
+    "minLon": 3.3333333,
+    "minLat": 51.775,
+    "maxLon": 3.5333333,
+    "maxLat": 51.825
+  },
+  "featureCounts": {
+    "navigation-marks": 6,
+    "depth-areas": 304,
+    "depth-contours": 303,
+    "soundings": 13323
+  },
+  "validationErrors": []
+}
