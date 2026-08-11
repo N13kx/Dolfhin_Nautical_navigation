@@ -1,0 +1,93 @@
+DOL-014 — Direct GitHub Artifact Installer
+
+Goal:
+Install the already validated GitHub Actions artifact
+"dolphin-ienc-zeeland-validated"
+directly from GitHub into Replit.
+
+Do NOT run GDAL.
+Do NOT run build.sh.
+Do NOT process raw .000 files.
+Do NOT modify nautical semantics.
+Do NOT modify frontend code.
+
+Repository:
+N13kx/Dolfhin_Nautical_navigation
+
+Branch:
+feature/v0.2.1b-official-ienc-integration
+
+Create a small reusable installer script:
+
+scripts/nautical/install-github-artifact.sh
+
+Requirements:
+
+1. Read GitHub authentication ONLY from environment variable:
+   GITHUB_TOKEN
+
+2. If GITHUB_TOKEN is absent:
+   STOP with a clear message.
+   Never ask to hardcode or commit a token.
+
+3. Query GitHub REST API for repository Actions artifacts.
+
+4. Find the newest non-expired artifact named exactly:
+   dolphin-ienc-zeeland-validated
+
+5. Report:
+   - artifact ID
+   - created_at
+   - size_in_bytes
+   - workflow run ID if available
+
+6. Download that artifact ZIP using the official GitHub artifact download endpoint.
+
+7. Download into a temporary directory only.
+
+8. Inspect the ZIP before replacing anything.
+
+Require:
+   nautical/catalog.json
+   nautical/cells/
+
+9. Parse nautical/catalog.json and require exactly:
+   totalCells === 61
+   passCells === 61
+   failCells === 0
+   cell 1R76W8LI exists
+   String(edition) === "80"
+
+10. Verify every file path referenced in catalog.json exists inside the extracted artifact.
+
+11. Back up current:
+    artifacts/dolphin/public/nautical
+
+12. Replace it only after ALL validation checks pass.
+
+13. If installation fails:
+    restore previous public nautical directory
+    exit non-zero.
+
+14. If installation succeeds:
+    remove temporary files and backup.
+
+15. Run:
+    pnpm --filter @workspace/dolphin exec tsc --noEmit
+    pnpm --filter @workspace/dolphin build
+
+16. Do not commit or push unless explicitly requested.
+
+17. Keep implementation minimal.
+    No broad repo audit.
+
+Final report:
+- artifact ID
+- artifact size
+- installed catalog counts
+- 1R76W8LI edition
+- cell directory count
+- missing referenced files
+- TypeScript result
+- build result
+- git status
