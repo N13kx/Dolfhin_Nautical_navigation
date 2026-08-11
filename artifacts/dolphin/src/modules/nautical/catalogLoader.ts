@@ -65,15 +65,6 @@ export const IENC_SOURCE_IDS: Record<IencDatasetName, string> = {
   soundings: 'ienc-soundings-source',
 };
 
-/**
- * SOUNDG is by far the largest per-cell dataset in Zeeland. Loading every
- * sounding for every cell intersecting a broad viewport overwhelms mobile
- * Safari long before individual labels are useful. Keep the validated data
- * untouched on disk, but only fetch/merge it once the user is close enough
- * for detailed depth inspection.
- */
-export const IENC_SOUNDINGS_LOAD_MIN_ZOOM = 13;
-
 let catalogCache: IencCatalog | null = null;
 let catalogInFlight: Promise<IencCatalog> | null = null;
 const datasetCache = new Map<string, GeoJsonFeatureCollection>();
@@ -197,14 +188,14 @@ function loadCellDataset(
 
 export class IencViewportController {
   private generation = 0;
-  private activeState = '';
+  private activeCellIds = '';
   private unavailable = new Set<string>();
 
   constructor(private readonly baseUrl: string = import.meta.env.BASE_URL) {}
 
   invalidateStyle(): void {
     this.generation += 1;
-    this.activeState = '';
+    this.activeCellIds = '';
   }
 
   async reconcile(map: MapLibreMap): Promise<void> {
@@ -220,16 +211,11 @@ export class IencViewportController {
 
     const cells = cellsIntersectingBbox(catalog, mapBoundsToBbox(map.getBounds()))
       .sort((a, b) => a.cellId.localeCompare(b.cellId));
-    const includeSoundings = map.getZoom() >= IENC_SOUNDINGS_LOAD_MIN_ZOOM;
-    const nextState = `${includeSoundings ? 'soundings' : 'no-soundings'}:${cells.map((cell) => cell.cellId).join(',')}`;
-    if (nextState === this.activeState) return;
-
-    const datasetsToLoad: readonly IencDatasetName[] = includeSoundings
-      ? IENC_DATASET_NAMES
-      : IENC_DATASET_NAMES.filter((dataset) => dataset !== 'soundings');
+    const nextCellIds = cells.map((cell) => cell.cellId).join(',');
+    if (nextCellIds === this.activeCellIds) return;
 
     const loaded = new Map<string, GeoJsonFeatureCollection>();
-    await Promise.all(cells.flatMap((cell) => datasetsToLoad.map(async (dataset) => {
+    await Promise.all(cells.flatMap((cell) => IENC_DATASET_NAMES.map(async (dataset) => {
       const key = `${cell.cellId}/${dataset}`;
       try {
         const collection = await loadCellDataset(cell, dataset, this.baseUrl);
@@ -248,7 +234,7 @@ export class IencViewportController {
     // order keeps MapLibre symbol collision results deterministic.
     const merged = new Map<IencDatasetName, unknown[]>(IENC_DATASET_NAMES.map((name) => [name, []]));
     for (const cell of cells) {
-      for (const dataset of datasetsToLoad) {
+      for (const dataset of IENC_DATASET_NAMES) {
         const collection = loaded.get(`${cell.cellId}/${dataset}`);
         if (collection) merged.get(dataset)!.push(...collection.features);
       }
@@ -257,7 +243,7 @@ export class IencViewportController {
       const source = map.getSource(IENC_SOURCE_IDS[dataset]) as GeoJSONSource | undefined;
       source?.setData({ type: 'FeatureCollection', features: merged.get(dataset)! } as never);
     }
-    this.activeState = nextState;
+    this.activeCellIds = nextCellIds;
   }
 
   private clearSources(map: MapLibreMap): void {
@@ -265,6 +251,6 @@ export class IencViewportController {
       const source = map.getSource(sourceId) as GeoJSONSource | undefined;
       source?.setData(EMPTY_FEATURE_COLLECTION as never);
     }
-    this.activeState = '';
+    this.activeCellIds = '';
   }
 }
