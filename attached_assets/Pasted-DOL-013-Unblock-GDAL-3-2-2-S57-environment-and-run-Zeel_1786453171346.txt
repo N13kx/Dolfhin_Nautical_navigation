@@ -1,0 +1,70 @@
+DOL-013 — Unblock GDAL 3.2.2 + S57 environment and run Zeeland build
+
+Goal:
+Run the existing Dolphin IENC pipeline for the 61 discovered Zeeland cells.
+
+Current verified state:
+- 61 unique .000 cells discovered
+- no duplicate cellIds
+- no ID conflicts
+- 60 DIRTY
+- 1R7788RI is INTERMEDIATE_HIT
+- 1R76W8LI is the newer edition 80 source
+- `nix-shell -p gdal` provides GDAL, but the pipeline reports:
+  BLOCKED: S57 driver not present in GDAL installation.
+- Earlier in this same Replit environment, `ogrinfo` successfully opened:
+  data/nautical/chart-source/1R76W8LI.000
+  using driver `S57`
+- That earlier working package was Replit/Nix `gdal 3.2.2`.
+
+This is an ENVIRONMENT task, not a pipeline refactor.
+
+Do NOT:
+- modify pipeline semantics
+- weaken GDAL/S57 checks
+- substitute another S-57 parser
+- change SOUNDG handling
+- use abs()
+- infer NAP
+- change frontend code
+- modify validation to make the build pass
+- merge branches
+- perform a broad repository audit
+
+First determine the smallest way to make the previously working GDAL 3.2.2 installation with S57 available in the current Replit shell.
+
+Verify explicitly:
+
+1. `gdal-config --version` returns exactly 3.2.2
+2. `ogrinfo --formats` contains S57
+3. `ogrinfo data/nautical/chart-source/1R76W8LI.000 DSID -so` succeeds using the S57 driver
+
+If necessary, make only the smallest Replit/Nix environment configuration change required to persist GDAL 3.2.2 + S57.
+
+Once all three checks PASS, run:
+
+bash scripts/nautical/build.sh .
+
+Do not change pipeline code if the build fails.
+
+If any individual cell or validation stage fails:
+STOP and report:
+- cellId
+- stage
+- exact error
+- whether previous successfully generated/cached data remains intact
+
+If the full build succeeds, report:
+- GDAL version
+- S57 driver PASS/FAIL
+- discovered cells
+- PASS/FAIL cells
+- 1R76W8LI edition
+- catalog totalCells/passCells/failCells
+- whether catalog.json was regenerated
+- total feature counts if available
+- git status
+
+Do not commit or push anything unless explicitly requested.
+
+Minimize Agent usage. Do not investigate unrelated files.
