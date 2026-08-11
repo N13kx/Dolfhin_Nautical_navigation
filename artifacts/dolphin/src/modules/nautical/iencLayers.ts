@@ -146,6 +146,32 @@ const SOURCE_LAYER_BY_GEOJSON_SOURCE: Record<string, string> = {
   'ienc-soundings-source': 'soundings',
 };
 
+// ── DOL-017 diagnostic: A/B layer isolation ──────────────────────────────
+// VITE_IENC_DIAGNOSTIC_LAYERS restricts which PMTiles source layers are
+// rendered, without altering source data.
+//
+// Accepted values (comma-separated): marks, areas, contours, soundings
+// Examples:
+//   VITE_IENC_DIAGNOSTIC_LAYERS=marks            → A: nav-marks only
+//   VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas      → B: marks + depth-areas
+//   VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas,contours → C: + depth-contours
+//   (unset)                                      → D: all four layers
+//
+// Has no effect in catalog mode. Temporary diagnostic only.
+const _diagEnv = import.meta.env.VITE_IENC_DIAGNOSTIC_LAYERS as string | undefined;
+const _diagAliases: Record<string, string> = {
+  marks: 'navigation-marks',
+  areas: 'depth-areas',
+  contours: 'depth-contours',
+  soundings: 'soundings',
+};
+const DIAG_ACTIVE_SOURCE_LAYERS: Set<string> | null = _diagEnv
+  ? new Set(_diagEnv.split(',').map((s) => _diagAliases[s.trim()] ?? s.trim()).filter(Boolean))
+  : null;
+
+/** Active diagnostic source layers for external inspection (e.g. MapView). */
+export const IENC_DIAG_ACTIVE_LAYERS: Set<string> | null = DIAG_ACTIVE_SOURCE_LAYERS;
+
 export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
   const specs: OverlaySpec[] = [
     // ── Navigation marks — light glow halo ──────────────────────────
@@ -614,7 +640,18 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
   if (IENC_RUNTIME_SOURCE === 'catalog') return specs;
 
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return specs.map((spec) => {
+
+  // DOL-017: filter to only the requested source layers (A/B isolation).
+  // Specs whose GeoJSON sourceId maps to an excluded layer are dropped entirely.
+  const activeSpecs = DIAG_ACTIVE_SOURCE_LAYERS
+    ? specs.filter((spec) => {
+        const sl = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
+        // Specs not in the IENC source map (e.g. future additions) pass through.
+        return !sl || DIAG_ACTIVE_SOURCE_LAYERS.has(sl);
+      })
+    : specs;
+
+  return activeSpecs.map((spec) => {
     const sourceLayer = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
     if (!sourceLayer) return spec;
     return {

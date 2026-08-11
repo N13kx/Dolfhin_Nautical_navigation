@@ -1,0 +1,165 @@
+DOL-017 — PMTiles MacBook crash diagnosis
+
+Context:
+DOL-016 PMTiles is now active and manually tested on iPhone.
+Result:
+- iPhone is clearly more stable than the old GeoJSON runtime.
+- Zeeland renders and can be panned/zoomed.
+- MacBook/browser still crashes when moving or zooming the map.
+- Navigation-mark visibility is a separate portrayal issue and is OUT OF SCOPE for DOL-017.
+
+Goal:
+Determine the actual cause of the MacBook PMTiles crash as cheaply and narrowly as possible.
+
+IMPORTANT:
+This is a DIAGNOSIS task first.
+Do NOT perform a broad refactor.
+Do NOT replace PMTiles.
+Do NOT return to the legacy GeoJSON runtime.
+Do NOT modify raw .000 files.
+Do NOT run GDAL or scripts/nautical/build.sh.
+Do NOT change SOUNDG semantics, SDAT, VDAT, NAP handling, provenance, or official/community separation.
+Do NOT touch Satellite ↔ Hybrid base-style lifecycle.
+Do NOT work on buoy portrayal yet.
+Do NOT push or merge anything.
+
+Current active runtime:
+VITE_IENC_SOURCE=pmtiles
+
+Expected PMTiles:
+artifacts/dolphin/public/nautical/dolphin-zeeland.pmtiles
+
+Expected source layers:
+- navigation-marks
+- depth-areas
+- depth-contours
+- soundings
+
+STEP 1 — Baseline inspection
+
+Inspect only the relevant PMTiles/MapLibre code:
+- artifacts/dolphin/src/components/MapView.tsx
+- artifacts/dolphin/src/modules/nautical/iencLayers.ts
+- artifacts/dolphin/src/modules/nautical/pmtilesProtocol.ts
+- direct helpers only if required
+
+Report:
+- minzoom/maxzoom of the PMTiles source and each nautical layer
+- whether all four source layers are active at broad zoom levels
+- whether MapLibre filters features by zoom before or after tile decoding
+- any obvious repeated source/layer recreation during move/zoom
+- any repeated setStyle usage during Satellite ↔ Hybrid (must remain NONE)
+
+STEP 2 — Add temporary diagnostics only if needed
+
+Add lightweight development-only instrumentation that can show:
+- current map zoom
+- MapLibre source data/loading events for the PMTiles source
+- number of rendered features per nautical source-layer where reasonably measurable
+- tile/source load errors
+- repeated style/source recreation
+- browser-reported JS heap/memory if the API is available
+
+Do not create expensive logging loops.
+Do not log every individual feature.
+
+STEP 3 — Controlled A/B isolation
+
+Create a TEMPORARY diagnostic mechanism to test these combinations independently without changing source data:
+
+A. navigation-marks only
+B. navigation-marks + depth-areas
+C. navigation-marks + depth-areas + depth-contours
+D. all four layers including soundings
+
+Prefer a temporary environment flag or one very small diagnostic switch.
+
+Do not permanently remove any layer.
+
+Run build checks for every required code change.
+
+STEP 4 — Diagnose
+
+Use the available Replit/browser environment as far as possible.
+
+If the MacBook crash itself cannot be reproduced inside Replit:
+prepare the diagnostics so the user can reproduce it externally on the MacBook and return the relevant console/memory evidence.
+
+Determine the most likely category:
+
+1. soundings feature density
+2. depth-contour geometry density
+3. depth-area polygon complexity
+4. navigation-symbol placement
+5. PMTiles/tile decoding
+6. repeated MapLibre style/source lifecycle work
+7. another evidenced cause
+
+Do not guess if evidence is insufficient.
+
+STEP 5 — Stop condition
+
+STOP after diagnosis.
+
+Do NOT implement a major fix in this task.
+
+Only implement a fix automatically if:
+- the root cause is strongly evidenced, AND
+- the fix is trivial/small, such as correcting an obviously wrong minzoom or duplicate source recreation,
+- and it does not alter nautical semantics.
+
+Otherwise report the proposed smallest next fix as DOL-017b.
+
+Validation:
+run
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+REPORT EXACTLY:
+
+DOL-017 status:
+- diagnosis COMPLETE / INCONCLUSIVE / BLOCKED
+
+Baseline:
+- PMTiles source min/max zoom
+- minzoom for navigation-marks
+- minzoom for depth-areas
+- minzoom for depth-contours
+- minzoom for soundings
+- source/style recreation found YES/NO
+
+A/B findings:
+- marks only:
+- + depth areas:
+- + contours:
+- + soundings:
+
+Evidence:
+- console errors
+- tile/source errors
+- memory findings
+- rendered-feature findings
+- other relevant evidence
+
+Root cause:
+- identified / likely / unknown
+- exact layer or mechanism
+
+Recommended DOL-017b:
+- smallest targeted fix
+- expected benefit
+- risks
+
+Code changes:
+- temporary diagnostics only / trivial fix / NONE
+
+TypeScript:
+PASS/FAIL
+
+Production build:
+PASS/FAIL
+
+Git status:
+...
+
+Do not commit or push unless explicitly instructed later.
