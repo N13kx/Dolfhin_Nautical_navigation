@@ -12,51 +12,28 @@ on:
       - '.github/workflows/ienc-zeeland-build.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-ienc:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     container:
       image: osgeo/gdal:ubuntu-small-3.2.2
       options: --user 0
 
     steps:
-      - name: Install Git
-        shell: bash
-        run: |
-          set -euo pipefail
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
-          git --version
-
-      - name: Checkout feature branch with Git metadata
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          BRANCH='feature/v0.2.1b-official-ienc-integration'
-
-          # Explicit checkout inside the mounted Actions workspace. This avoids
-          # actions/checkout archive fallback in the minimal GDAL container and
-          # guarantees that later publish steps have a real .git directory.
-          git init .
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags origin "$BRANCH"
-          git checkout -B "$BRANCH" FETCH_HEAD
-
-          test -d .git
-          git rev-parse --is-inside-work-tree
-          git status --short
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/v0.2.1b-official-ienc-integration
+          fetch-depth: 1
 
       - name: Install Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      - name: Remove obsolete duplicate pilot sources
+      - name: Remove obsolete duplicate pilot sources from build workspace
         shell: bash
         run: |
           rm -f data/nautical/chart-source/1R76W8LI_1783372678701.000
@@ -100,30 +77,37 @@ jobs:
           if (String(w.edition) !== '80') throw new Error(`1R76W8LI expected edition 80, got ${w.edition}`);
           NODE
 
-      - name: Commit validated public chart output
+      - name: Package validated Zeeland output
         shell: bash
         run: |
           set -euo pipefail
-          test -d .git
-          git rev-parse --is-inside-work-tree
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/dolphin-ienc-artifact
+          cp -a artifacts/dolphin/public/nautical /tmp/dolphin-ienc-artifact/nautical
+          cp data/nautical/catalog.json /tmp/dolphin-ienc-artifact/catalog.audit.json
+          node <<'NODE'
+          const fs = require('fs');
+          const c = JSON.parse(fs.readFileSync('/tmp/dolphin-ienc-artifact/nautical/catalog.json','utf8'));
+          fs.writeFileSync('/tmp/dolphin-ienc-artifact/BUILD-VERIFIED.txt', [
+            'Dolphin IENC Zeeland build',
+            `totalCells=${c.totalCells}`,
+            `passCells=${c.passCells}`,
+            `failCells=${c.failCells}`,
+            `builtAt=${c.builtAt}`,
+            'GDAL=3.2.2',
+            'S57=present',
+            'STATUS=VALIDATED_FOR_EXPERIMENTAL_ALPHA',
+            'Not for navigation'
+          ].join('\n') + '\n');
+          NODE
 
-          # Persist the source cleanup plus validated frontend-safe output and audit manifests.
-          git add -A -- \
-            data/nautical/chart-source/1R76W8LI_1783372678701.000 \
-            data/nautical/chart-source/1R7788RI_1783372678701.000 || true
-          git add -f artifacts/dolphin/public/nautical
-          git add -f data/nautical/catalog.json
-          find data/nautical/cells -name cell-manifest.json -print0 | xargs -0 -r git add -f
-
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit."
-            exit 0
-          fi
-
-          git commit -m "data(nautical): publish validated Zeeland IENC batch [skip ci]"
-          git push origin HEAD:feature/v0.2.1b-official-ienc-integration
+      - name: Upload validated Zeeland artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-ienc-zeeland-validated
+          path: /tmp/dolphin-ienc-artifact/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
 
       - name: Build summary
         if: always()
