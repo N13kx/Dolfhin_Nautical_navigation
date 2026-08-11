@@ -1,0 +1,94 @@
+DOL-014 — Install validated Zeeland artifact into Dolphin
+
+MODE:
+EXECUTION ONLY.
+
+Do not modify pipeline code.
+Do not modify frontend code.
+Do not change nautical semantics.
+Do not weaken validation.
+Do not merge branches.
+Do not redesign anything.
+
+Goal:
+Install the already validated GitHub Actions artifact
+"dolphin-ienc-zeeland-validated"
+into Dolphin's public nautical directory so the existing catalog-based frontend loader can use all 61 Zeeland cells.
+
+Context:
+The GitHub Actions build already passed:
+- GDAL 3.2.2
+- S57
+- 61 total cells
+- 61 PASS
+- 0 FAIL
+- 1R76W8LI = edition 80
+
+Task:
+
+1. Locate the uploaded artifact ZIP in the Replit workspace.
+   Do not guess the filename; identify the actual ZIP.
+
+2. Inspect its top-level structure before changing anything.
+
+3. Confirm it contains:
+   - nautical/catalog.json
+   - nautical/cells/
+   - per-cell public GeoJSON output
+
+4. Before replacement, back up the current public nautical directory:
+   artifacts/dolphin/public/nautical
+   to a temporary backup directory.
+
+5. Replace ONLY:
+   artifacts/dolphin/public/nautical
+
+   with the validated `nautical/` directory from the ZIP.
+
+6. Do not alter:
+   - data/nautical/chart-source/
+   - data/nautical/intermediate/
+   - pipeline scripts
+   - frontend source
+   - GPS
+   - map lifecycle
+   - community seamarks
+
+7. Verify the installed catalog with Node and require exactly:
+   - totalCells === 61
+   - passCells === 61
+   - failCells === 0
+   - cell 1R76W8LI exists
+   - edition of 1R76W8LI === "80"
+
+8. Verify all catalog file paths referenced for every cell actually exist under:
+   artifacts/dolphin/public/nautical/
+
+9. If any verification fails:
+   RESTORE the previous nautical directory from backup and STOP.
+   Report the exact failure.
+   Do not attempt speculative fixes.
+
+10. If verification passes:
+   remove the temporary backup.
+
+11. Run:
+   pnpm --filter @workspace/dolphin exec tsc --noEmit
+   pnpm --filter @workspace/dolphin build
+
+12. Do not claim MANUALLY TESTED or DONE.
+
+Final report:
+- artifact filename used
+- installed path
+- catalog total/pass/fail
+- 1R76W8LI edition
+- number of cell directories
+- missing referenced files, if any
+- TypeScript result
+- build result
+- git status
+- explicit recommendation for iPhone test
+
+Keep Agent usage minimal.
+Do not perform a broad repo audit.
