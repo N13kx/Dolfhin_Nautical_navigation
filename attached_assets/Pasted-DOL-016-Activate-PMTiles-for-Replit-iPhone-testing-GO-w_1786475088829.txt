@@ -1,0 +1,73 @@
+DOL-016 — Activate PMTiles for Replit iPhone testing.
+
+GO was granted by the Git inspection.
+
+Goal:
+Run Dolphin in Replit using the already implemented PMTiles IENC path so we can manually test map performance on iPhone.
+
+IMPORTANT:
+- Do NOT merge to main.
+- Do NOT push anything yet.
+- Do NOT rewrite Git history.
+- Do NOT run GDAL.
+- Do NOT run scripts/nautical/build.sh.
+- Do NOT modify raw .000 files.
+- Do NOT modify nautical semantics.
+- Do NOT change signed SOUNDG handling.
+- Do NOT reintroduce the GeoJSON sounding zoom-13 workaround.
+- Preserve Satellite ↔ Hybrid same-base behavior: no setStyle for those transitions.
+- Preserve official/community data separation.
+
+Current PMTiles implementation commit:
+96421ba71ee1ebc0836de0e254851a9ae10626a6
+
+Feature flag:
+VITE_IENC_SOURCE=pmtiles
+
+TASK
+
+1. Confirm the validated 61-cell PMTiles output required by the frontend is available in the current Replit workspace.
+
+2. Confirm the PMTiles archive contains the expected four source layers:
+   - navigation-marks
+   - depth-areas
+   - depth-contours
+   - soundings
+
+3. Confirm the frontend PMTiles URL/path matches the actual generated PMTiles file.
+
+4. Do NOT regenerate nautical source data if the validated PMTiles file is already available.
+
+5. Activate:
+   VITE_IENC_SOURCE=pmtiles
+
+   for the Replit Dolphin runtime/preview.
+
+6. Run:
+   pnpm --filter @workspace/dolphin exec tsc --noEmit
+   pnpm --filter @workspace/dolphin build
+
+7. Start/restart the Dolphin Replit preview with the PMTiles feature flag active.
+
+8. Verify from runtime/network logs that Dolphin is actually requesting the PMTiles archive and is NOT loading the 61-cell GeoJSON catalog as the active map source.
+
+9. Do not make performance optimizations or unrelated code changes during this task.
+
+REPORT:
+
+- PMTiles filename/path
+- PMTiles filesize
+- source layers found
+- VITE_IENC_SOURCE effective value
+- PMTiles runtime request observed: YES/NO
+- legacy 61-cell GeoJSON loading active: YES/NO
+- TypeScript: PASS/FAIL
+- production build: PASS/FAIL
+- preview started: YES/NO
+- code changes made: list or NONE
+- git status
+
+If the PMTiles archive is missing or invalid:
+STOP.
+Do not fall back silently to GeoJSON.
+Report the blocker.
