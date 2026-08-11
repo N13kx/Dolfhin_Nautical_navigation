@@ -11,8 +11,9 @@ import {
   removeOverlays,
   applyLayerGroupVisibility,
 } from '../modules/map/overlayManager';
-import { IENC_CLICKABLE_LAYER_IDS } from '../modules/nautical/iencLayers';
+import { IENC_CLICKABLE_LAYER_IDS, IENC_RUNTIME_SOURCE } from '../modules/nautical/iencLayers';
 import { IencViewportController } from '../modules/nautical/catalogLoader';
+import { ensurePmtilesProtocol } from '../modules/nautical/pmtilesProtocol';
 
 export type { MapMode, MapViewRef };
 
@@ -106,6 +107,8 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
     useEffect(() => {
       if (!mapContainer.current) return;
 
+      if (IENC_RUNTIME_SOURCE === 'pmtiles') ensurePmtilesProtocol();
+
       // Pre-check WebGL availability before handing control to MapLibre
       const testCanvas = document.createElement('canvas');
       const gl =
@@ -134,7 +137,7 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
 
       const modeShowsIenc = () => modeRef.current === 'Dolphin' || modeRef.current === 'Hybrid';
       const reconcileIenc = () => {
-        if (!modeShowsIenc() || !map.current) return;
+        if (IENC_RUNTIME_SOURCE !== 'catalog' || !modeShowsIenc() || !map.current) return;
         void iencControllerRef.current.reconcile(initialMap);
       };
 

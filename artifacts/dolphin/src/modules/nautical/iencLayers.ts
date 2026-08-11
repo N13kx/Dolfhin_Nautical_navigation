@@ -133,10 +133,21 @@ export const IENC_CLICKABLE_LAYER_IDS: string[] = [
  *
  * Sources are registered idempotently by applyOverlays — safe to call multiple times.
  */
-export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
-  void baseUrl;
+export type IencRuntimeSource = 'catalog' | 'pmtiles';
 
-  return [
+export const IENC_RUNTIME_SOURCE: IencRuntimeSource =
+  import.meta.env.VITE_IENC_SOURCE === 'pmtiles' ? 'pmtiles' : 'catalog';
+
+const PMTILES_SOURCE_ID = 'ienc-pmtiles-source';
+const SOURCE_LAYER_BY_GEOJSON_SOURCE: Record<string, string> = {
+  'ienc-nav-marks-source': 'navigation-marks',
+  'ienc-depth-areas-source': 'depth-areas',
+  'ienc-depth-contours-source': 'depth-contours',
+  'ienc-soundings-source': 'soundings',
+};
+
+export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
+  const specs: OverlaySpec[] = [
     // ── Navigation marks — light glow halo ──────────────────────────
     //
     // Rendered behind the main mark circle. Applies only to LIGHTS features.
@@ -224,7 +235,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
               'match',
               // CATLAM is a numeric S-57 attribute stored in sourceProperties.
               // Convert to string for match expression compatibility.
-              ['to-string', ['get', 'CATLAM', ['get', 'sourceProperties']]],
+              ['to-string', ['coalesce', ['get', 'CATLAM'], ['get', 'CATLAM', ['get', 'sourceProperties']]]],
               '2', '#cc3333',  // port-hand
               '3', '#339944',  // starboard-hand
               '4', '#9933aa',  // preferred-channel
@@ -248,6 +259,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
               // COLOUR is stored as an array of string-encoded S-57 codes.
               // ['at', 0, ...] retrieves the primary (first) colour element.
               ['coalesce',
+                ['get', 'COLOURPrimary'],
                 ['at', 0, ['get', 'COLOUR', ['get', 'sourceProperties']]],
                 '1',
               ],
@@ -377,14 +389,14 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
           // Only show label when OBJNAM is present and non-empty.
           [
             '!=',
-            ['coalesce', ['get', 'OBJNAM', ['get', 'sourceProperties']], ''],
+            ['coalesce', ['get', 'OBJNAM'], ['get', 'OBJNAM', ['get', 'sourceProperties']], ''],
             '',
           ],
         ],
         layout: {
           'text-field': [
             'coalesce',
-            ['get', 'OBJNAM', ['get', 'sourceProperties']],
+            ['coalesce', ['get', 'OBJNAM'], ['get', 'OBJNAM', ['get', 'sourceProperties']]],
             '',
           ],
           'text-size': 10,
@@ -598,4 +610,26 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       groupId: 'charted-depths',
     },
   ];
+
+  if (IENC_RUNTIME_SOURCE === 'catalog') return specs;
+
+  const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return specs.map((spec) => {
+    const sourceLayer = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
+    if (!sourceLayer) return spec;
+    return {
+      ...spec,
+      sourceId: PMTILES_SOURCE_ID,
+      source: {
+        type: 'vector' as const,
+        url: `pmtiles://${base}nautical/dolphin-zeeland.pmtiles`,
+        attribution: 'Official IENC source: Rijkswaterstaat; Dolphin experimental portrayal; not for navigation',
+      },
+      layer: {
+        ...spec.layer,
+        source: PMTILES_SOURCE_ID,
+        'source-layer': sourceLayer,
+      } as typeof spec.layer,
+    };
+  });
 }

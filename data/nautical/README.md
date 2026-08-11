@@ -223,3 +223,25 @@ for a fresh pipeline run.
 - Not for navigation
 - Rijkswaterstaat data licence has not been reviewed for public redistribution
 - TOPMAR parent-association semantics cannot be fully verified from GDAL decoded output alone
+# Experimental Zeeland PMTiles portrayal (DOL-016)
+
+The validated per-cell GeoJSON and manifests remain the source of truth. After
+the workflow has proved an all-PASS 61/61 publication, it derives
+`dolphin-zeeland.pmtiles` as a rendering/distribution artifact with four source
+layers: `navigation-marks`, `depth-areas`, `depth-contours`, and `soundings`.
+
+The build uses Felt Tippecanoe 2.29.0 directly to PMTiles. It retains feature
+identity, official/source separation, signed charted values and datum/status
+fields, plus the minimal portrayal attributes used by the current MapLibre
+layers. Nested `provenance`, most of `sourceProperties`, and duplicate checksums
+are deliberately omitted from tiles; the full values remain available in the
+validated GeoJSON, catalog, and cell manifests. The generated
+`dolphin-zeeland.build-report.json` records the exact retained-property policy
+and source feature counts.
+
+The app defaults to the existing catalog/GeoJSON loader. Build the app with
+`VITE_IENC_SOURCE=pmtiles` to enable the prototype vector source. Removing that
+variable rolls back without deleting or changing the catalog loader.
+
+This is an experimental portrayal artifact, not a new nautical data source and
+not for navigation.

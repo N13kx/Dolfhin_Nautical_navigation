@@ -77,6 +77,19 @@ jobs:
           if (String(w.edition) !== '80') throw new Error(`1R76W8LI expected edition 80, got ${w.edition}`);
           NODE
 
+      - name: Build Zeeland PMTiles prototype
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential git libsqlite3-dev zlib1g-dev
+          git clone --branch 2.29.0 --depth 1 https://github.com/felt/tippecanoe.git /tmp/tippecanoe
+          make -C /tmp/tippecanoe -j2
+          install /tmp/tippecanoe/tippecanoe /usr/local/bin/tippecanoe
+          bash scripts/nautical/build-pmtiles.sh .
+          test -s artifacts/dolphin/public/nautical/dolphin-zeeland.pmtiles
+          node -e "const r=require('./artifacts/dolphin/public/nautical/dolphin-zeeland.build-report.json'); if(r.totalCells!==61||r.passCells!==61) process.exit(1); console.log(r)"
+
       - name: Package validated Zeeland output
         shell: bash
         run: |
@@ -95,6 +108,8 @@ jobs:
             `builtAt=${c.builtAt}`,
             'GDAL=3.2.2',
             'S57=present',
+            'Tippecanoe=2.29.0',
+            'PMTiles=dolphin-zeeland.pmtiles',
             'STATUS=VALIDATED_FOR_EXPERIMENTAL_ALPHA',
             'Not for navigation'
           ].join('\n') + '\n');
