@@ -1,0 +1,112 @@
+name: IENC Zeeland Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/v0.2.1b-official-ienc-integration
+    paths:
+      - 'data/nautical/chart-source/**'
+      - 'scripts/nautical/**'
+      - 'test/nautical/**'
+      - '.github/workflows/ienc-zeeland-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ienc:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    container:
+      image: osgeo/gdal:ubuntu-small-3.2.2
+      options: --user 0
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/v0.2.1b-official-ienc-integration
+          fetch-depth: 0
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Remove obsolete duplicate pilot sources
+        shell: bash
+        run: |
+          rm -f data/nautical/chart-source/1R76W8LI_1783372678701.000
+          rm -f data/nautical/chart-source/1R7788RI_1783372678701.000
+
+      - name: Verify pinned GDAL and S57
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GDAL: $(gdal-config --version)"
+          test "$(gdal-config --version)" = "3.2.2"
+          ogrinfo --formats | grep -q S57
+          ogrinfo data/nautical/chart-source/1R76W8LI.000 DSID -so
+
+          # build.sh expects GDAL tools below ~/.nix-profile/bin.
+          mkdir -p "$HOME/.nix-profile/bin"
+          ln -sf "$(command -v gdal-config)" "$HOME/.nix-profile/bin/gdal-config"
+          ln -sf "$(command -v ogrinfo)" "$HOME/.nix-profile/bin/ogrinfo"
+          ln -sf "$(command -v ogr2ogr)" "$HOME/.nix-profile/bin/ogr2ogr"
+
+      - name: Run Dolphin IENC builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/nautical/build.sh . | tee /tmp/ienc-build.log
+
+      - name: Verify published catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const p = 'artifacts/dolphin/public/nautical/catalog.json';
+          const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+          console.log(`catalog total=${c.totalCells} pass=${c.passCells} fail=${c.failCells}`);
+          if (c.totalCells !== 61) throw new Error(`Expected 61 cells, got ${c.totalCells}`);
+          if (c.passCells !== 61) throw new Error(`Expected 61 PASS cells, got ${c.passCells}`);
+          if (c.failCells !== 0) throw new Error(`Expected 0 FAIL cells, got ${c.failCells}`);
+          const w = c.cells.find(x => x.cellId === '1R76W8LI');
+          if (!w) throw new Error('1R76W8LI missing from catalog');
+          if (String(w.edition) !== '80') throw new Error(`1R76W8LI expected edition 80, got ${w.edition}`);
+          NODE
+
+      - name: Commit validated public chart output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Persist the source cleanup plus validated frontend-safe output and audit manifests.
+          git add -A -- \
+            data/nautical/chart-source/1R76W8LI_1783372678701.000 \
+            data/nautical/chart-source/1R7788RI_1783372678701.000 || true
+          git add -f artifacts/dolphin/public/nautical
+          git add -f data/nautical/catalog.json
+          find data/nautical/cells -name cell-manifest.json -print0 | xargs -0 -r git add -f
+
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+
+          git commit -m "data(nautical): publish validated Zeeland IENC batch [skip ci]"
+          git push origin HEAD:feature/v0.2.1b-official-ienc-integration
+
+      - name: Build summary
+        if: always()
+        shell: bash
+        run: |
+          echo '--- IENC build tail ---'
+          tail -n 80 /tmp/ienc-build.log 2>/dev/null || true
+          if [ -f artifacts/dolphin/public/nautical/catalog.json ]; then
+            node -e "const c=require('./artifacts/dolphin/public/nautical/catalog.json'); console.log({totalCells:c.totalCells,passCells:c.passCells,failCells:c.failCells,builtAt:c.builtAt})"
+          fi
