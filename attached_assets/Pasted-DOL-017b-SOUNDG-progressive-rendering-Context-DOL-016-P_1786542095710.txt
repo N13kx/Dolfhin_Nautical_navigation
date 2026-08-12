@@ -1,0 +1,197 @@
+DOL-017b — SOUNDG progressive rendering
+
+Context:
+DOL-016 PMTiles is active.
+DOL-017 A/B testing produced strong runtime evidence:
+
+- MacBook CRASHES with full PMTiles layers.
+- MacBook is STABLE with:
+  VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas,contours
+- Therefore enabling SOUNDG is the isolated trigger.
+- SOUNDG must NOT simply be removed: depth information is core Dolphin functionality.
+
+Goal:
+Keep SOUNDG visible while progressively increasing sounding detail with zoom, so Dolphin remains stable while freely panning, zooming and searching.
+
+CURRENT BRANCH:
+feature/v0.2.1b-official-ienc-integration
+
+IMPORTANT SAFETY RULES:
+- Do NOT modify raw .000 files.
+- Do NOT alter validated source values.
+- NEVER use abs().
+- Preserve signed SOUNDG semantics exactly.
+- Preserve chartedValueRelationToDatum.
+- Preserve sourceCellId/provenance/datum/status/official-source metadata.
+- Do NOT infer safe depth or current depth.
+- Display reduction/generalization is cartographic only.
+- Do NOT alter SDAT/VDAT/NAP semantics.
+- Do NOT merge official/community data.
+- Do NOT return to GeoJSON.
+- Preserve Satellite ↔ Hybrid no-setStyle behavior.
+- Do NOT merge to main.
+- Do NOT broad-refactor the repository.
+
+STEP 1 — Inspect current SOUNDG tile behavior
+
+Inspect only:
+- scripts/nautical/build-pmtiles.sh
+- scripts/nautical/prepare-pmtiles-input.cjs
+- artifacts/dolphin/src/modules/nautical/iencLayers.ts
+- artifacts/dolphin/src/components/MapView.tsx
+- dolphin-zeeland.build-report.json
+- direct PMTiles helpers if strictly necessary
+
+Determine:
+- current tippecanoe SOUNDG behavior per zoom
+- whether all SOUNDG features remain available at higher zooms
+- what deterministic lower-zoom generalization is cheapest and safest
+
+STEP 2 — Implement progressive SOUNDG LOD
+
+Preferred design:
+
+Broad zoom:
+show a deterministic reduced subset of real SOUNDG features.
+
+Intermediate zoom:
+show a denser deterministic subset.
+
+Close/navigation zoom:
+show the full relevant SOUNDG detail available in the tiles.
+
+Do NOT create averaged, interpolated or synthetic soundings.
+
+Every displayed sounding must correspond to a real validated SOUNDG feature.
+
+Selection/generalization must be deterministic between builds.
+
+Prefer doing the density reduction in the tile-build layer rather than loading all 435,082 soundings and hiding most of them only after decoding.
+
+You may use separate source layers / zoom bands if this is the cleanest solution, for example conceptually:
+
+soundings-low
+soundings-medium
+soundings-full
+
+but choose the smallest robust implementation after inspecting the current toolchain.
+
+The MapLibre portrayal should select the appropriate source layer by zoom without loading/rendering unnecessary SOUNDG density.
+
+Depth areas, depth contours and navigation marks must remain unchanged.
+
+STEP 3 — Preserve useful depth visibility
+
+Acceptance requirement:
+
+Soundings must NOT disappear entirely until zoom 12.
+
+At broader useful map zooms, Dolphin should retain some real charted depth information.
+
+As the user zooms in, SOUNDG density must increase progressively.
+
+At close navigation zoom, retain full relevant detail as far as practical.
+
+Document exact zoom bands and density strategy.
+
+STEP 4 — Remove temporary diagnostic state if appropriate
+
+The DOL-017 diagnostic env filter/logging may remain only if useful for subsequent A/B testing.
+
+Do not leave noisy production logging.
+
+Do NOT accidentally leave:
+VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas,contours
+
+as the normal runtime configuration after implementing DOL-017b.
+
+Normal PMTiles mode must include progressive SOUNDG.
+
+STEP 5 — Rebuild PMTiles
+
+Use the existing validated 61-cell Zeeland output.
+
+Do NOT run raw S57/GDAL extraction again if not required.
+
+Build a fresh:
+dolphin-zeeland.pmtiles
+
+Verify:
+- 61/61 validated input remains intact
+- four logical nautical data categories remain represented
+- no source/provenance semantic fields required by Dolphin are lost
+- all displayed SOUNDG values are unchanged from their source features
+
+Report:
+- resulting PMTiles filesize
+- SOUNDG layer/source-layer names
+- zoom bands
+- number/density of SOUNDG features per zoom band where measurable
+- full-detail feature count
+
+STEP 6 — App validation
+
+Set normal runtime to:
+
+VITE_IENC_SOURCE=pmtiles
+
+Ensure the temporary no-soundings diagnostic flag is removed/unset for the normal test build.
+
+Run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+Restart preview.
+
+Do NOT commit/push yet.
+
+REPORT:
+
+DOL-017b status:
+IMPLEMENTED / BLOCKED
+
+Progressive strategy:
+- low zoom:
+- medium zoom:
+- close zoom:
+
+SOUNDG:
+- original validated feature count
+- low zoom displayed count/density
+- medium zoom displayed count/density
+- full-detail count
+- synthetic/averaged soundings created: MUST BE NO
+- signed values modified: MUST BE NO
+
+Other layers changed:
+- navigation marks YES/NO
+- depth areas YES/NO
+- depth contours YES/NO
+
+PMTiles:
+- filename
+- filesize
+- build PASS/FAIL
+
+Runtime:
+- VITE_IENC_SOURCE
+- VITE_IENC_DIAGNOSTIC_LAYERS
+- progressive SOUNDG active YES/NO
+- GeoJSON fallback active YES/NO
+
+TypeScript:
+PASS/FAIL
+
+Production build:
+PASS/FAIL
+
+Files changed:
+...
+
+Git status:
+...
+
+STOP after implementation and automated validation.
+Do NOT commit or push.
+MacBook and iPhone manual tests come next.

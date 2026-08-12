@@ -8,16 +8,29 @@ validation_mode="${4:-strict}"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
-required_tippecanoe_version="2.29.0"
+# Minimum required version: 2.29.0 (accepts any later release, e.g. 2.78.x).
+min_tippecanoe_major=2
+min_tippecanoe_minor=29
 actual_tippecanoe_version="$(tippecanoe --version 2>&1 | awk '{print $2}' | sed 's/^v//')"
-if [[ "$actual_tippecanoe_version" != "$required_tippecanoe_version" ]]; then
-  echo "Expected tippecanoe $required_tippecanoe_version, got $actual_tippecanoe_version" >&2
+actual_major="$(echo "$actual_tippecanoe_version" | cut -d. -f1)"
+actual_minor="$(echo "$actual_tippecanoe_version" | cut -d. -f2)"
+if [[ "$actual_major" -lt "$min_tippecanoe_major" ]] || \
+   { [[ "$actual_major" -eq "$min_tippecanoe_major" ]] && [[ "$actual_minor" -lt "$min_tippecanoe_minor" ]]; }; then
+  echo "Expected tippecanoe >= ${min_tippecanoe_major}.${min_tippecanoe_minor}.0, got $actual_tippecanoe_version" >&2
   exit 1
 fi
+echo "[IENC PMTiles] tippecanoe $actual_tippecanoe_version OK"
 
 node "$repo_root/scripts/nautical/prepare-pmtiles-input.cjs" "$input_dir" "$work_dir/input" "$validation_mode"
 mkdir -p "$(dirname "$output_file")"
 
+# ── Two sounding source-layers for progressive LOD ───────────────────────
+# soundings-sparse (tile zoom 8–11): grid-selected ~1-km sparse subset.
+#   MapLibre layers soundingsSparsePoint/Label render at map zoom 10–11.
+# soundings (tile zoom 12–16): full validated 435 k dataset.
+#   MapLibre layers soundingsPoint/Label render at map zoom 12+.
+# Navigation marks, depth areas and depth contours span the full zoom range.
+# ─────────────────────────────────────────────────────────────────────────
 tippecanoe \
   --force \
   --minimum-zoom=8 \
@@ -32,7 +45,8 @@ tippecanoe \
   -L "navigation-marks:$work_dir/input/navigation-marks.ndjson" \
   -L "depth-areas:$work_dir/input/depth-areas.ndjson" \
   -L "depth-contours:$work_dir/input/depth-contours.ndjson" \
-  -L "soundings:$work_dir/input/soundings.ndjson"
+  -L "{\"file\":\"$work_dir/input/soundings-sparse.ndjson\",\"layer\":\"soundings-sparse\",\"minzoom\":8,\"maxzoom\":11}" \
+  -L "{\"file\":\"$work_dir/input/soundings.ndjson\",\"layer\":\"soundings\",\"minzoom\":12,\"maxzoom\":16}"
 
 cp "$work_dir/input/build-report.json" "${output_file%.pmtiles}.build-report.json"
 echo "[IENC PMTiles] Wrote $output_file ($(wc -c < "$output_file") bytes)"

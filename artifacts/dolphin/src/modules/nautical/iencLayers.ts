@@ -26,27 +26,30 @@
  * This decision is documented in nautical-investigation/ACCEPTANCE-TEST.md.
  * ─────────────────────────────────────────────────────────────────────
  *
- * ── SOUNDING LABEL DENSITY STRATEGY (DOL-011, 2026-08-10) ───────────
- * Progressive density is driven by text-padding interpolation across zoom.
- * Higher text-padding at low zoom creates a larger exclusion zone around
- * each placed symbol, allowing MapLibre's collision engine to admit far
- * fewer labels. As zoom increases, text-padding shrinks and more labels
- * fit without colliding.
+ * ── SOUNDING PROGRESSIVE LOD — TWO SOURCE-LAYER DESIGN ─────────────
  *
- * Only chartedValueRelationToDatum === "below" features are labeled.
- * "above" (drying heights) and "at" features are never shown as depth labels.
+ * Two PMTiles source layers deliver progressive sounding detail by zoom:
  *
- * symbol-sort-key ascending by |depth|: shallower soundings sort earlier and
- * win collision priority at sparse zoom levels — prioritising safety-critical
- * shallow depth information over deeper soundings.
+ * soundings-sparse (PMTiles tile zoom 8–11 / MapLibre layer zoom 10–11):
+ *   Deterministic grid-based subset — one shallowest "below"-datum sounding
+ *   per 0.01° × 0.01° grid cell (~1 km). All "above" (drying heights) and
+ *   "at" soundings are always included (safety-critical, rare).
+ *   Rendered by soundingsSparsePoint (hit target) and soundingsSparseLabel.
+ *   text-padding: zoom 10 → 40px, zoom 11 → 15px.
+ *   Typical feature count in a MacBook viewport at zoom 10: 50–200 features.
  *
- * Zoom thresholds and density targets (468 eligible below-datum soundings):
- *   zoom 10 — text-padding 80, text-size  9 →  sparse   (~7–15% visible)
- *   zoom 12 — text-padding 30, text-size 10 →  moderate (~20–35% visible)
- *   zoom 14 — text-padding  8, text-size 11 →  dense    (~55–75% visible)
- *   zoom 16 — text-padding  2, text-size 12 →  near-full (~85–95% visible)
+ * soundings (PMTiles tile zoom 12–16 / MapLibre layer zoom 12+):
+ *   Full validated dataset (435,082 features). Rendered by soundingsPoint and
+ *   soundingsLabel. MapLibre decodes this source-layer only at zoom ≥ 12,
+ *   where tiles are small enough that per-tile feature counts are manageable.
+ *   text-padding: zoom 12 → 30px, zoom 14 → 8px, zoom 16 → 2px.
  *
- * Actual visible fraction varies with viewport size and local cluster density.
+ * Every displayed sounding is a real validated SOUNDG feature. No values are
+ * averaged, interpolated, or synthesised at any zoom level.
+ *
+ * symbol-sort-key ascending by |depth|: shallower soundings win collision
+ * priority at all zoom levels — prioritising safety-critical shallow depth.
+ *
  * Results are deterministic: same viewport + zoom → same label set.
  * ─────────────────────────────────────────────────────────────────────
  *
@@ -108,8 +111,10 @@ export const IENC_LAYER_IDS = {
   navMarksLabel:        'ienc-nav-marks-label',        // OBJNAM text labels
   depthAreasFill:       'ienc-depth-areas-fill',
   depthContoursLine:    'ienc-depth-contours-line',
-  soundingsPoint:       'ienc-soundings-point',        // transparent tap/click hit target
-  soundingsLabel:       'ienc-soundings-label',        // progressive charted-depth text
+  soundingsPoint:        'ienc-soundings-point',        // transparent tap/click hit target (zoom 12+)
+  soundingsLabel:        'ienc-soundings-label',        // progressive charted-depth text (zoom 12+)
+  soundingsSparsePoint:  'ienc-soundings-sparse-point', // hit target for sparse layer (zoom 10–11)
+  soundingsSparseLabel:  'ienc-soundings-sparse-label', // depth label for sparse layer (zoom 10–11)
 } as const;
 
 export type IencLayerId = (typeof IENC_LAYER_IDS)[keyof typeof IENC_LAYER_IDS];
@@ -124,7 +129,8 @@ export const IENC_CLICKABLE_LAYER_IDS: string[] = [
   IENC_LAYER_IDS.navMarksPoint,
   IENC_LAYER_IDS.depthAreasFill,
   IENC_LAYER_IDS.depthContoursLine,
-  IENC_LAYER_IDS.soundingsPoint,
+  IENC_LAYER_IDS.soundingsSparsePoint, // hit-target at zoom 10–11
+  IENC_LAYER_IDS.soundingsPoint,       // hit-target at zoom 12+
 ];
 
 /**
@@ -140,37 +146,13 @@ export const IENC_RUNTIME_SOURCE: IencRuntimeSource =
 
 const PMTILES_SOURCE_ID = 'ienc-pmtiles-source';
 const SOURCE_LAYER_BY_GEOJSON_SOURCE: Record<string, string> = {
-  'ienc-nav-marks-source': 'navigation-marks',
-  'ienc-depth-areas-source': 'depth-areas',
-  'ienc-depth-contours-source': 'depth-contours',
-  'ienc-soundings-source': 'soundings',
+  'ienc-nav-marks-source':          'navigation-marks',
+  'ienc-depth-areas-source':        'depth-areas',
+  'ienc-depth-contours-source':     'depth-contours',
+  'ienc-soundings-sparse-source':   'soundings-sparse',
+  'ienc-soundings-source':          'soundings',
 };
 
-// ── DOL-017 diagnostic: A/B layer isolation ──────────────────────────────
-// VITE_IENC_DIAGNOSTIC_LAYERS restricts which PMTiles source layers are
-// rendered, without altering source data.
-//
-// Accepted values (comma-separated): marks, areas, contours, soundings
-// Examples:
-//   VITE_IENC_DIAGNOSTIC_LAYERS=marks            → A: nav-marks only
-//   VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas      → B: marks + depth-areas
-//   VITE_IENC_DIAGNOSTIC_LAYERS=marks,areas,contours → C: + depth-contours
-//   (unset)                                      → D: all four layers
-//
-// Has no effect in catalog mode. Temporary diagnostic only.
-const _diagEnv = import.meta.env.VITE_IENC_DIAGNOSTIC_LAYERS as string | undefined;
-const _diagAliases: Record<string, string> = {
-  marks: 'navigation-marks',
-  areas: 'depth-areas',
-  contours: 'depth-contours',
-  soundings: 'soundings',
-};
-const DIAG_ACTIVE_SOURCE_LAYERS: Set<string> | null = _diagEnv
-  ? new Set(_diagEnv.split(',').map((s) => _diagAliases[s.trim()] ?? s.trim()).filter(Boolean))
-  : null;
-
-/** Active diagnostic source layers for external inspection (e.g. MapView). */
-export const IENC_DIAG_ACTIVE_LAYERS: Set<string> | null = DIAG_ACTIVE_SOURCE_LAYERS;
 
 export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
   const specs: OverlaySpec[] = [
@@ -500,7 +482,97 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       groupId: 'charted-depths',
     },
 
-    // ── Soundings — transparent hit-target circle (SOUNDG) ───────────
+    // ── Soundings sparse — transparent hit-target (zoom 10–11) ──────────
+    //
+    // Hit-target for the soundings-sparse PMTiles source layer.
+    // Covers map zoom 10–11 (before the full soundings layer takes over at 12).
+    // Opacity 0 — queryRenderedFeatures still detects it for tap interaction.
+    // In catalog mode this spec is a no-op (catalog sources feed full soundings).
+    {
+      sourceId: 'ienc-soundings-sparse-source',
+      source: {
+        type: 'geojson' as const,
+        data: EMPTY_FEATURE_COLLECTION,
+      },
+      layerId: IENC_LAYER_IDS.soundingsSparsePoint,
+      layer: {
+        id: IENC_LAYER_IDS.soundingsSparsePoint,
+        type: 'circle' as const,
+        source: 'ienc-soundings-sparse-source',
+        minzoom: 10,
+        maxzoom: 12,
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 8,
+            12, 10,
+          ],
+          'circle-opacity': 0,
+          'circle-stroke-width': 0,
+        },
+      },
+      groupId: 'charted-depths',
+    },
+
+    // ── Soundings sparse — depth labels (zoom 10–11) ────────────────────
+    //
+    // Renders depth labels from the soundings-sparse source layer.
+    // Uses the same below/above/at filtering and symbol-sort-key as the full
+    // soundingsLabel layer. At zoom 10–11 the sparse source layer contains
+    // only one shallowest sounding per ~1 km grid cell, so the feature count
+    // decoded from tiles is ~50–200 in a typical MacBook viewport.
+    // text-padding provides additional density control within that subset.
+    //
+    // The maxzoom: 12 boundary ensures this layer stops rendering exactly when
+    // the full soundingsLabel layer (minzoom 12) takes over — no gap or overlap.
+    {
+      sourceId: 'ienc-soundings-sparse-source',
+      source: {
+        type: 'geojson' as const,
+        data: EMPTY_FEATURE_COLLECTION,
+      },
+      layerId: IENC_LAYER_IDS.soundingsSparseLabel,
+      layer: {
+        id: IENC_LAYER_IDS.soundingsSparseLabel,
+        type: 'symbol' as const,
+        source: 'ienc-soundings-sparse-source',
+        minzoom: 10,
+        maxzoom: 12,
+        filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
+        layout: {
+          'text-field': [
+            'to-string',
+            ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
+          ],
+          'text-size': [
+            'interpolate', ['linear'], ['zoom'],
+            10,  9,
+            11, 10,
+          ],
+          // Sparse source layer limits raw feature count; text-padding further
+          // controls label density within that reduced set.
+          'text-padding': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 40,
+            11, 15,
+          ],
+          'text-anchor': 'center' as const,
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-optional': true,
+          // Shallower soundings win collision priority — safety-critical.
+          'symbol-sort-key': ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
+        },
+        paint: {
+          'text-color': '#c8e8f8',
+          'text-halo-color': '#071820',
+          'text-halo-width': 1.2,
+        },
+      },
+      groupId: 'charted-depths',
+    },
+
+    // ── Soundings — transparent hit-target circle (SOUNDG, zoom 12+) ─────
     //
     // PURPOSE: interaction only, not visual portrayal.
     // The colored dot portrayal has been replaced by progressive depth labels
@@ -509,6 +581,8 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     // queryRenderedFeatures — MapLibre hit-tests transparent circles at their
     // full paint radius even when opacity is 0.
     //
+    // minzoom 12: full soundings source layer is present in PMTiles tiles
+    // from zoom 12. Below zoom 12, soundingsSparsePoint handles hit detection.
     // All three relations (below / above / at) are kept in the hit-target
     // so that tapping any sounding opens the detail sheet.
     {
@@ -522,7 +596,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: IENC_LAYER_IDS.soundingsPoint,
         type: 'circle' as const,
         source: 'ienc-soundings-source',
-        minzoom: 10,
+        minzoom: 12,
         paint: {
           // Generous hit radius at all zoom levels; fully transparent.
           'circle-radius': [
@@ -567,15 +641,12 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     //   collision priority at sparse zoom levels. This ensures safety-critical
     //   shallow depth information appears before deeper soundings.
     //
-    // Zoom thresholds and density targets (468 eligible below-datum soundings):
-    //   zoom 10 — padding 80px, size  9px →  sparse    (~7–15% visible)
+    // Zoom thresholds and density targets for the full soundings layer (zoom 12+):
     //   zoom 12 — padding 30px, size 10px →  moderate  (~20–35% visible)
     //   zoom 14 — padding  8px, size 11px →  dense     (~55–75% visible)
     //   zoom 16 — padding  2px, size 12px →  near-full (~85–95% visible)
     //
-    // text-size also increases with zoom (9→12px), which amplifies the density
-    // effect: larger glyphs occupy more space and further reduce crowding at
-    // lower zoom levels.
+    // Zoom 10–11 is handled by soundingsSparseLabel (sparse source layer).
     {
       sourceId: 'ienc-soundings-source', // source already registered above
       source: {
@@ -587,7 +658,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: IENC_LAYER_IDS.soundingsLabel,
         type: 'symbol' as const,
         source: 'ienc-soundings-source',
-        minzoom: 10,
+        minzoom: 12,
         // Only below-datum soundings are displayed as charted-depth labels.
         // above (drying height) and at are excluded from label portrayal.
         filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
@@ -599,11 +670,10 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
             'to-string',
             ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
           ],
-          // Progressive text size: amplifies the density effect by increasing
-          // glyph footprint at lower zoom in addition to text-padding.
+          // Text size grows with zoom — larger glyphs amplify the density effect.
+          // Zoom 10–11 handled by soundingsSparseLabel; this layer starts at 12.
           'text-size': [
             'interpolate', ['linear'], ['zoom'],
-            10,  9,
             12, 10,
             14, 11,
             16, 12,
@@ -611,7 +681,6 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
           // PRIMARY density control: shrinking exclusion zone as zoom increases.
           'text-padding': [
             'interpolate', ['linear'], ['zoom'],
-            10, 80,   // wide exclusion → very sparse
             12, 30,   // moderate exclusion
             14,  8,   // tight exclusion → dense
             16,  2,   // minimal exclusion → near-full
@@ -641,17 +710,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
 
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
-  // DOL-017: filter to only the requested source layers (A/B isolation).
-  // Specs whose GeoJSON sourceId maps to an excluded layer are dropped entirely.
-  const activeSpecs = DIAG_ACTIVE_SOURCE_LAYERS
-    ? specs.filter((spec) => {
-        const sl = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
-        // Specs not in the IENC source map (e.g. future additions) pass through.
-        return !sl || DIAG_ACTIVE_SOURCE_LAYERS.has(sl);
-      })
-    : specs;
-
-  return activeSpecs.map((spec) => {
+  return specs.map((spec) => {
     const sourceLayer = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
     if (!sourceLayer) return spec;
     return {

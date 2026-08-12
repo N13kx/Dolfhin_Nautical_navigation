@@ -11,7 +11,7 @@ import {
   removeOverlays,
   applyLayerGroupVisibility,
 } from '../modules/map/overlayManager';
-import { IENC_CLICKABLE_LAYER_IDS, IENC_RUNTIME_SOURCE, IENC_DIAG_ACTIVE_LAYERS } from '../modules/nautical/iencLayers';
+import { IENC_CLICKABLE_LAYER_IDS, IENC_RUNTIME_SOURCE } from '../modules/nautical/iencLayers';
 import { IencViewportController } from '../modules/nautical/catalogLoader';
 import { ensurePmtilesProtocol } from '../modules/nautical/pmtilesProtocol';
 
@@ -193,46 +193,6 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
       initialMap.on('dragstart', handleUserInteraction);
       initialMap.on('rotatestart', handleUserInteraction);
 
-      // ── DOL-017 diagnostics (DEV only — tree-shaken in production) ───────────
-      if (import.meta.env.DEV) {
-        // On load: report active IENC config and initial heap.
-        initialMap.once('load', () => {
-          const diagLayers = import.meta.env.VITE_IENC_DIAGNOSTIC_LAYERS as string | undefined;
-          console.log(
-            '[DOL-017] Map loaded.',
-            `source=${IENC_RUNTIME_SOURCE}`,
-            `diagLayers=${diagLayers ?? 'all (D)'}`,
-            `activeLayers=${IENC_DIAG_ACTIVE_LAYERS ? [...IENC_DIAG_ACTIVE_LAYERS].join(',') : 'all'}`,
-          );
-          const perf = performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } };
-          if (perf.memory) {
-            console.log(
-              `[DOL-017] Heap at load: ${Math.round(perf.memory.usedJSHeapSize / 1e6)}MB` +
-              ` / ${Math.round(perf.memory.jsHeapSizeLimit / 1e6)}MB`,
-            );
-          }
-        });
-
-        // On moveend: report zoom + memory (debounced by existing 150 ms timer above).
-        initialMap.on('moveend', () => {
-          const zoom = Math.round(initialMap.getZoom() * 100) / 100;
-          const perf = performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } };
-          const heapStr = perf.memory
-            ? ` heap=${Math.round(perf.memory.usedJSHeapSize / 1e6)}MB/${Math.round(perf.memory.jsHeapSizeLimit / 1e6)}MB`
-            : '';
-          console.log(`[DOL-017] moveend zoom=${zoom}${heapStr}`);
-        });
-
-        // On sourcedata: log when the PMTiles source finishes loading a tile batch.
-        initialMap.on('sourcedata', (e) => {
-          if (e.sourceId !== 'ienc-pmtiles-source') return;
-          if ((e as { isSourceLoaded?: boolean }).isSourceLoaded) {
-            const zoom = Math.round(initialMap.getZoom() * 10) / 10;
-            console.log(`[DOL-017] PMTiles sourceLoaded zoom=${zoom}`);
-          }
-        });
-      }
-      // ────────────────────────────────────────────────────────────────────────
 
       // Global click listener for official IENC features.
       // Queries only layers that currently exist in the map (guards against
