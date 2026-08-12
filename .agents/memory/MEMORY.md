@@ -1,2 +1,3 @@
 - [Dolphin Architecture](dolphin-architecture.md) — module layout, Hybrid mode fix, tracking snap-back fix, GPS stale detection, search UX patterns.
 - [IENC Datum Investigation](ienc-datum-investigation.md) — VDAT=24/SDAT=42 findings; BLOCKED verdict; SDAT=42 absent from all accessible standards.
+- [IENC PMTiles LOD](ienc-pmtiles-lod.md) — two-layer sounding strategy (soundings-sparse zoom 10-11, soundings zoom 12-16); tippecanoe 2.78.0 via Nix; sparse = 0.01° grid + all above/at.

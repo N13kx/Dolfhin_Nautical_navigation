@@ -26,4 +26,3 @@ channel = "stable-25_05"
 
 [userenv.shared]
 VITE_IENC_SOURCE = "pmtiles"
-VITE_IENC_DIAGNOSTIC_LAYERS = "marks,areas,contours"

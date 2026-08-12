@@ -7,13 +7,15 @@
     "navigation-marks": 3379,
     "depth-areas": 46296,
     "depth-contours": 46214,
-    "soundings": 435082
+    "soundings": 435082,
+    "soundings-sparse": 49220
   },
   "sourceLayers": [
     "navigation-marks",
     "depth-areas",
     "depth-contours",
-    "soundings"
+    "soundings",
+    "soundings-sparse"
   ],
   "propertyPolicy": {
     "retained": [
@@ -47,5 +49,11 @@
       "sourceProperties except CATLAM/OBJNAM/BOYSHP/BCNSHP/SCAMIN/COLOURPrimary",
       "sourceChecksum (available through the validated cell manifest/catalog)"
     ]
+  },
+  "soundingsSparseStrategy": {
+    "gridDegrees": 0.01,
+    "description": "One shallowest below-datum sounding per 0.01-degree grid cell; all above/at soundings included",
+    "syntheticFeatures": false,
+    "valuesModified": false
   }
 }
