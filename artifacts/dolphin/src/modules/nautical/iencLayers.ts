@@ -516,12 +516,10 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
 
     // ── Soundings sparse — depth labels (zoom 10–11) ────────────────────
     //
-    // Renders depth labels from the soundings-sparse source layer.
-    // Uses the same below/above/at filtering and symbol-sort-key as the full
-    // soundingsLabel layer. At zoom 10–11 the sparse source layer contains
-    // only one shallowest sounding per ~1 km grid cell, so the feature count
-    // decoded from tiles is ~50–200 in a typical MacBook viewport.
-    // text-padding provides additional density control within that subset.
+    // Renders the stored signed chartedValueMetres for all verified datum
+    // relations present in the sparse source. Below-datum values remain
+    // positive; above-datum drying heights remain negative; at-datum is zero.
+    // No value conversion, inference, averaging or synthesis occurs here.
     //
     // The maxzoom: 12 boundary ensures this layer stops rendering exactly when
     // the full soundingsLabel layer (minzoom 12) takes over — no gap or overlap.
@@ -538,11 +536,11 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         source: 'ienc-soundings-sparse-source',
         minzoom: 10,
         maxzoom: 12,
-        filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
+        filter: ['match', ['get', 'chartedValueRelationToDatum'], ['below', 'above', 'at'], true, false],
         layout: {
           'text-field': [
             'to-string',
-            ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
+            ['to-number', ['get', 'chartedValueMetres'], 0],
           ],
           'text-size': [
             'interpolate', ['linear'], ['zoom'],
@@ -560,7 +558,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
           'text-allow-overlap': false,
           'text-ignore-placement': false,
           'text-optional': true,
-          // Shallower soundings win collision priority — safety-critical.
+          // Collision ordering only; this does not alter the displayed or stored value.
           'symbol-sort-key': ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
         },
         paint: {
@@ -611,19 +609,17 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
       groupId: 'charted-depths',
     },
 
-    // ── Soundings — progressive charted-depth text labels ────────────
+    // ── Soundings — progressive signed charted-value text labels ───────
     //
     // DISPLAY MODEL:
-    //   Only relation === "below" features are portrayed as depth labels.
-    //   chartedValueMetres is POSITIVE for below-datum soundings (e.g. +2.9).
-    //   S-57 contract: Z > 0 = charted depth below datum. Positive Z is stored
-    //   as-is. abs() in the text-field expression is defensive and no-op for
-    //   well-formed below-datum data. Stored signed value is never mutated.
-    //   No "*" suffix.
-    //
-    //   relation === "above" (drying heights) and "at" are NOT shown as depth
-    //   labels. They remain in the data and are accessible via tap → sheet.
-    //   They must never be implied to be navigable or safe depth.
+    //   chartedValueMetres is the original signed normalized SOUNDG Z value.
+    //   S-57 contract preserved by the validated pipeline:
+    //     > 0 = below datum (charted depth)
+    //     < 0 = above datum (drying height)
+    //       0 = at datum
+    //   The label renders that stored signed value directly. No abs(), sign
+    //   inversion, safe-depth inference, current-depth inference or synthetic
+    //   value is introduced by this portrayal.
     //
     // PROGRESSIVE DENSITY — text-padding interpolation (deterministic):
     //
@@ -636,10 +632,8 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     //   As the user zooms in, text-padding shrinks and progressively more
     //   labels clear the collision check and appear.
     //
-    //   symbol-sort-key ascending by |chartedValueMetres|:
-    //   Shallower soundings (smaller absolute value) sort first and win
-    //   collision priority at sparse zoom levels. This ensures safety-critical
-    //   shallow depth information appears before deeper soundings.
+    //   symbol-sort-key uses magnitude only for collision ordering. It does
+    //   not alter the signed value displayed to the user or stored in data.
     //
     // Zoom thresholds and density targets for the full soundings layer (zoom 12+):
     //   zoom 12 — padding 30px, size 10px →  moderate  (~20–35% visible)
@@ -659,16 +653,11 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         type: 'symbol' as const,
         source: 'ienc-soundings-source',
         minzoom: 12,
-        // Only below-datum soundings are displayed as charted-depth labels.
-        // above (drying height) and at are excluded from label portrayal.
-        filter: ['==', ['get', 'chartedValueRelationToDatum'], 'below'],
+        filter: ['match', ['get', 'chartedValueRelationToDatum'], ['below', 'above', 'at'], true, false],
         layout: {
-          // Display positive magnitude of the stored signed value.
-          // chartedValueMetres is positive for below-datum (e.g. +2.9 → "2.9").
-          // abs() is defensive (no-op for well-formed data); stored value unchanged.
           'text-field': [
             'to-string',
-            ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
+            ['to-number', ['get', 'chartedValueMetres'], 0],
           ],
           // Text size grows with zoom — larger glyphs amplify the density effect.
           // Zoom 10–11 handled by soundingsSparseLabel; this layer starts at 12.
@@ -691,9 +680,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
           'text-allow-overlap': false,
           'text-ignore-placement': false,
           'text-optional': true,
-          // Sort ascending by depth magnitude so shallower soundings (smallest
-          // abs value) win collision priority at sparse zoom levels.
-          // Safety rationale: shallow depth is the critical hazard information.
+          // Collision ordering only; this does not alter the displayed or stored value.
           'symbol-sort-key': ['abs', ['to-number', ['get', 'chartedValueMetres'], 0]],
         },
         paint: {
