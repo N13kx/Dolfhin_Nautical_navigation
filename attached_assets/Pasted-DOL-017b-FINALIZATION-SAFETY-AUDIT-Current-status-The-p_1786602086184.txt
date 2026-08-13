@@ -1,0 +1,308 @@
+DOL-017b — FINALIZATION / SAFETY AUDIT
+
+Current status:
+The progressive SOUNDG implementation is working well on MacBook.
+
+Manual MacBook result:
+PASS
+- free pan/zoom works
+- crashes are resolved in the tested scenario
+- depth soundings remain visible
+
+Current architecture:
+- PMTiles runtime
+- soundings-sparse at broad/intermediate zoom
+- full soundings at navigation zoom
+- legacy GeoJSON runtime is not active
+
+DO NOT redesign the solution.
+DO NOT broaden scope.
+DO NOT work on drying-flat portrayal.
+DO NOT work on buoy portrayal.
+Those are separate follow-up tasks.
+
+Current branch:
+feature/v0.2.1b-official-ienc-integration
+
+==================================================
+PART 1 — SAFETY AUDIT OF SPARSE SOUNDG SELECTION
+==================================================
+
+Audit:
+
+scripts/nautical/prepare-pmtiles-input.cjs
+
+Report the exact algorithm used to generate:
+soundings-sparse
+
+Specifically verify:
+
+1. How a grid cell is defined.
+2. How features are grouped into grid cells.
+3. How the selected "shallowest below-datum sounding" is determined.
+4. Which exact property/value is compared.
+5. Whether comparison uses:
+   - raw signed Z
+   - chartedValueMetres
+   - chartedValueRelationToDatum
+   - another value
+
+HARD SAFETY REQUIREMENTS:
+
+- NEVER use abs().
+- NEVER convert above-datum values into positive navigable depth.
+- NEVER infer safe depth.
+- NEVER infer current water depth.
+- NEVER invent/average/interpolate SOUNDG values.
+- Every sparse sounding must be an unchanged real validated source feature.
+
+Signed semantics must remain:
+
+positive source Z = above datum
+negative source Z = below datum
+zero = at datum
+
+However:
+Use the NORMALIZED Dolphin properties already defined by the validated pipeline consistently.
+Do not reinterpret the raw coordinate independently if the normalized contract already provides the relation/value.
+
+IMPORTANT:
+"above", "below" and "at" are datum relationships.
+Do NOT call any category "safety-critical" unless that statement is supported by an explicit separate nautical rule.
+
+If the current implementation uses incorrect signed comparison:
+STOP and fix ONLY that comparison.
+
+Do not change source data.
+
+==================================================
+PART 2 — VERIFY SPARSE OUTPUT AGAINST FULL OUTPUT
+==================================================
+
+Programmatically audit soundings-sparse against the full validated soundings input.
+
+Verify:
+
+- every sparse feature exists in the full SOUNDG set
+- every selected feature preserves its original stable/source ID
+- chartedValueMetres unchanged
+- chartedValueRelationToDatum unchanged
+- sourceCellId unchanged
+- depthDatum unchanged
+- depthDatumStatus unchanged
+- napIdentityStatus unchanged
+- provenance/source metadata unchanged where present
+
+Report:
+
+sparse total
+below count
+above count
+at count
+
+and:
+
+synthetic features = 0
+modified sounding values = 0
+missing provenance = 0 or exact count
+
+If any mismatch occurs:
+FAIL and STOP.
+
+==================================================
+PART 3 — REVIEW THE LOD STRATEGY
+==================================================
+
+Current intended behavior:
+
+zoom < 10
+- no individual SOUNDG portrayal
+
+zoom 10–11
+- soundings-sparse only
+
+zoom >= 12
+- full soundings layer
+
+Verify there is:
+- no rendering gap
+- no unintended simultaneous duplicate portrayal at zoom 12
+- no full SOUNDG decode below zoom 12
+- no sparse SOUNDG decode once the full-detail band is active, except unavoidable tile-boundary behavior inherent to MapLibre
+
+Confirm that:
+depth areas remain unchanged
+depth contours remain unchanged
+navigation marks remain unchanged
+
+==================================================
+PART 4 — TIPPECANOE REPRODUCIBILITY
+==================================================
+
+The prototype was rebuilt using:
+tippecanoe 2.78.0
+
+Do NOT leave the rule as merely:
+>= 2.29.0
+
+For Dolphin's validated nautical build we need reproducibility.
+
+Change the PMTiles build contract to require:
+
+tippecanoe 2.78.0
+
+exactly, unless there is a strong technical reason this exact version cannot be reproducibly installed.
+
+If exact pinning is impossible in the current Replit runtime:
+
+- do NOT silently accept arbitrary future versions
+- document the limitation
+- keep the actual GitHub Actions production build reproducibly pinned to a specific version/container/package revision
+
+The validated artifact build must have a known Tippecanoe version recorded in its build report.
+
+Add/report:
+
+tippecanoeVersion: "2.78.0"
+
+in appropriate PMTiles build metadata if it is not already recorded.
+
+Do not modify the S57/GDAL pipeline version rules.
+
+==================================================
+PART 5 — CLEAN TEMPORARY DIAGNOSTICS
+==================================================
+
+Confirm:
+
+VITE_IENC_DIAGNOSTIC_LAYERS is completely unset.
+
+Remove remaining DOL-017 temporary diagnostic code if any remains.
+
+Normal runtime must be:
+
+VITE_IENC_SOURCE=pmtiles
+
+Do not modify the Satellite ↔ Hybrid lifecycle.
+
+Satellite ↔ Hybrid:
+MUST NOT call setStyle.
+
+Community/OpenSeaMap data remains separate.
+
+==================================================
+PART 6 — REBUILD
+==================================================
+
+Rebuild ONLY the PMTiles rendering artifact from the already validated 61-cell output.
+
+Do NOT rerun raw S57/GDAL extraction.
+
+Produce:
+
+artifacts/dolphin/public/nautical/dolphin-zeeland.pmtiles
+
+and updated build report.
+
+Verify:
+
+validated source cells = 61
+pass = 61
+fail = 0
+
+Full SOUNDG count should remain:
+435082
+
+Report if this differs.
+
+Then run:
+
+pnpm --filter @workspace/dolphin exec tsc --noEmit
+pnpm --filter @workspace/dolphin build
+
+Restart preview with:
+
+VITE_IENC_SOURCE=pmtiles
+
+==================================================
+PART 7 — DO NOT COMMIT YET
+==================================================
+
+Do NOT commit.
+Do NOT push.
+Do NOT merge.
+Do NOT open a PR.
+
+The user will perform the final iPhone manual test first.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report exactly:
+
+DOL-017b status:
+IMPLEMENTED / AUTOMATED TESTED / BLOCKED
+
+Sparse algorithm:
+- grid size
+- exact selection rule
+- exact numeric/property comparison
+- abs() used YES/NO
+- averaged/interpolated values YES/NO
+- safety inference introduced YES/NO
+
+Sparse audit:
+- total
+- below
+- above
+- at
+- synthetic features
+- modified values
+- missing provenance
+- all sparse IDs found in full dataset YES/NO
+
+LOD:
+- zoom <10
+- zoom 10–11
+- zoom >=12
+- duplicate portrayal at transition YES/NO
+- full soundings decoded below zoom12 YES/NO
+
+Full SOUNDG count:
+...
+
+Tippecanoe:
+- version
+- exact pin enforced YES/NO
+- version recorded in build report YES/NO
+
+Other nautical layers modified:
+- marks YES/NO
+- depth areas YES/NO
+- contours YES/NO
+
+PMTiles:
+- filesize
+- source layers
+- build PASS/FAIL
+
+Runtime:
+- VITE_IENC_SOURCE
+- VITE_IENC_DIAGNOSTIC_LAYERS
+- GeoJSON active YES/NO
+
+TypeScript:
+PASS/FAIL
+
+Production build:
+PASS/FAIL
+
+Files changed:
+...
+
+Git status:
+...
+
+STOP.
+Await iPhone manual acceptance test.
