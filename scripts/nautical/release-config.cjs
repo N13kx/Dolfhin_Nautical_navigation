@@ -20,7 +20,7 @@ function validateReleaseSelection(config, cells) {
   const ids = new Set(cells.map(cell => cell.cellId));
   const inland = config.sourceSets['inland-mandatory-14'];
   const missingInland = inland.cells.filter(id => !ids.has(id));
-  const inlandPresent = inland.cells.filter(id => ids.has(id));
+  const inlandPresent = cells.filter(cell => inland.cells.includes(cell.cellId));
   const zeeland = config.sourceSets['zeeland-validated-61'];
   const zeelandPresent = cells.filter(cell => zeeland.cells.includes(cell.cellId));
   const unknown = cells.filter(cell => !inland.cells.includes(cell.cellId) && !zeeland.cells.includes(cell.cellId));
