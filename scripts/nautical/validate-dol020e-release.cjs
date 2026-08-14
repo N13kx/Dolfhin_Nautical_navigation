@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { loadReleaseConfig, validateReleaseSelection } = require('./release-config.cjs');
 
 const rootDir = process.argv[2];
@@ -41,13 +42,17 @@ for (const cell of selection.inlandPresent) {
   }
 }
 
-const bredaIntermediate = path.join(rootDir, 'data', 'nautical', 'intermediate', '1R7WK003');
-const bredaText = fs.readdirSync(bredaIntermediate)
-  .filter(name => name.endsWith('.geojson'))
-  .map(name => fs.readFileSync(path.join(bredaIntermediate, name), 'utf8'))
-  .join('\n');
+const bredaSource = path.join(rootDir, 'data', 'nautical', 'chart-source', 'inland-private', '1R7WK003.000');
+const bredaText = execFileSync('ogrinfo', [
+  '-al', '-q',
+  '-oo', 'SPLIT_MULTIPOINT=NO',
+  '-oo', 'ADD_SOUNDG_DEPTH=NO',
+  '-oo', 'LNAM_REFS=YES',
+  '-oo', 'UPDATES=APPLY',
+  bredaSource,
+], { encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
 for (const name of ['Belcrumhaven', 'Mark', 'Markkanaal']) {
-  if (!bredaText.includes(name)) errors.push(`1R7WK003: audited Breda-area name missing from normalized content: ${name}`);
+  if (!bredaText.includes(name)) errors.push(`1R7WK003: audited Breda-area name missing from complete S-57 source content: ${name}`);
 }
 
 if (errors.length) {
