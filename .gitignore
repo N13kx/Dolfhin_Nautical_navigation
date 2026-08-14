@@ -57,3 +57,7 @@ attached_assets/*.000
 # IENC pipeline intermediate data — generated; never commit
 data/nautical/raw/
 data/nautical/intermediate/
+
+# DOL-020e inland source cells are staged locally or fetched from the private
+# audit repository for a build. Never add their raw bytes to the public repo.
+data/nautical/chart-source/inland-private/

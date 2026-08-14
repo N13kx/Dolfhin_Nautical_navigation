@@ -40,6 +40,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { discoverCells } = require('./discover-cells.cjs');
+const { resolveDatumProfile } = require('./datum-profile.cjs');
 
 const NAV_CLASSES = ['BCNSPP', 'BOYLAT', 'BOYSPP', 'LIGHTS', 'TOPMAR'];
 
@@ -49,15 +50,6 @@ const DOLPHIN_KIND_MAP = {
   BOYSPP: 'buoy-special',
   LIGHTS: 'light',
   TOPMAR: 'topmark',
-};
-
-const DATUM_SCHEMA = {
-  depthDatum:           'Approximate LAT',
-  depthDatumCode:       42,
-  depthDatumStatus:     'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
-  verticalDatum:        'Local Datum',
-  verticalDatumCode:    24,
-  napIdentityStatus:    'UNVERIFIED',
 };
 
 const BANNED_FIELDS = new Set(['verticalDatumNapInferred']);
@@ -132,6 +124,7 @@ function loadMetadata(intermediateDir, cellId) {
 
 function normalizeCellFromIntermediate(cellId, checksum, intermediateDir, processedAt) {
   const meta          = loadMetadata(intermediateDir, cellId);
+  const datumProfile  = resolveDatumProfile(meta);
   const actualChecksum = meta.sourceChecksum || checksum;
   const navFeatures   = [];
   const depFeatures   = [];
@@ -180,7 +173,7 @@ function normalizeCellFromIntermediate(cellId, checksum, intermediateDir, proces
       rawObjectClass: 'DEPARE',
       DRVAL1: props['DRVAL1'] !== undefined ? props['DRVAL1'] : null,
       DRVAL2: props['DRVAL2'] !== undefined ? props['DRVAL2'] : null,
-      ...DATUM_SCHEMA,
+      ...datumProfile,
       sourceKind:       'official',
       sourceCellId:     cellId,
       sourceStableId:   lnam !== null && lnam !== undefined ? String(lnam) : null,
@@ -204,7 +197,7 @@ function normalizeCellFromIntermediate(cellId, checksum, intermediateDir, proces
     const outProps = {
       rawObjectClass: 'DEPCNT',
       VALDCO: props['VALDCO'] !== undefined ? props['VALDCO'] : null,
-      ...DATUM_SCHEMA,
+      ...datumProfile,
       sourceKind:       'official',
       sourceCellId:     cellId,
       sourceStableId:   lnam !== null && lnam !== undefined ? String(lnam) : null,
@@ -249,7 +242,7 @@ function normalizeCellFromIntermediate(cellId, checksum, intermediateDir, proces
       const outProps = {
         chartedValueMetres:            z,
         chartedValueRelationToDatum:   relation,
-        ...DATUM_SCHEMA,
+        ...datumProfile,
         sourceFeatureLnam,
         sourceCellId:     cellId,
         sourceChecksum:   actualChecksum,

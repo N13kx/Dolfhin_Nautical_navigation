@@ -1,0 +1,110 @@
+name: IENC Family Alpha 75-cell Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ienc:
+    runs-on: ubuntu-latest
+    container:
+      image: osgeo/gdal:ubuntu-small-3.2.2
+      options: --user 0
+    env:
+      AUDIT_REPOSITORY: N13kx/dol-020c-ienc-metadata-audit
+      AUDIT_COMMIT: 3bb95075295abd75b98da87bfe39c75e6f37f80e
+
+    steps:
+      - name: Checkout focused public feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install private-source checkout prerequisite
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends git
+
+      - name: Retrieve mandatory sources read-only from private audit repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.IENC_AUDIT_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          umask 077
+          git clone --filter=blob:none --no-checkout "https://x-access-token:${GH_TOKEN}@github.com/${AUDIT_REPOSITORY}.git" /tmp/ienc-audit
+          git -C /tmp/ienc-audit checkout --detach "$AUDIT_COMMIT"
+          mkdir -p data/nautical/chart-source/inland-private
+          for id in 1R7HV002 1R7SP997 1R7HV001 1R7HD002 1R7HD001 1R7OM991 1R7OM977 1R7NO977 1R7DK980 1R7NI963 1R7BE967 1R7AM252 1R7WK003 1R7LE976; do
+            install -m 0444 "/tmp/ienc-audit/input/${id}/${id}.000" "data/nautical/chart-source/inland-private/${id}.000"
+          done
+          test "$(find data/nautical/chart-source/inland-private -type f -name '*.000' | wc -l | tr -d ' ')" = 14
+
+      - name: Verify pinned GDAL and S57
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gdal-config --version)" = "3.2.2"
+          ogrinfo --formats | grep -q S57
+          mkdir -p "$HOME/.nix-profile/bin"
+          ln -sf "$(command -v gdal-config)" "$HOME/.nix-profile/bin/gdal-config"
+          ln -sf "$(command -v ogrinfo)" "$HOME/.nix-profile/bin/ogrinfo"
+          ln -sf "$(command -v ogr2ogr)" "$HOME/.nix-profile/bin/ogr2ogr"
+
+      - name: Run datum regression tests
+        run: node --test test/nautical/datum-profile.test.cjs
+
+      - name: Build and validate all 75 cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/nautical/build.sh . | tee /tmp/ienc-build.log
+          node scripts/nautical/validate-dol020e-release.cjs .
+
+      - name: Build PMTiles with existing LOD rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential git libsqlite3-dev zlib1g-dev
+          git clone --branch 2.29.0 --depth 1 https://github.com/felt/tippecanoe.git /tmp/tippecanoe
+          make -C /tmp/tippecanoe -j2
+          install /tmp/tippecanoe/tippecanoe /usr/local/bin/tippecanoe
+          bash scripts/nautical/build-pmtiles.sh .
+          node scripts/nautical/validate-dol020e-release.cjs .
+
+      - name: Ensure raw inland sources cannot enter artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git status --short -- data/nautical/chart-source/inland-private | wc -l | tr -d ' ')" = 0
+          ! find artifacts/dolphin/public/nautical -type f -name '*.000' | grep -q .
+
+      - name: Upload validated public nautical artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-ienc-family-alpha-75-validated
+          path: artifacts/dolphin/public/nautical/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
+
+      - name: Build summary
+        if: always()
+        shell: bash
+        run: |
+          tail -n 100 /tmp/ienc-build.log 2>/dev/null || true
+          if [ -f artifacts/dolphin/public/nautical/catalog.json ]; then
+            node -e "const c=require('./artifacts/dolphin/public/nautical/catalog.json'); console.log({totalCells:c.totalCells,passCells:c.passCells,failCells:c.failCells})"
+          fi

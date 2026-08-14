@@ -19,6 +19,8 @@ const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { discoverCells } = require('./discover-cells.cjs');
+const { datumProfileFromManifest } = require('./datum-profile.cjs');
+const { loadReleaseConfig, sourceSetForCell } = require('./release-config.cjs');
 
 const [, , rootDir] = process.argv;
 if (!rootDir) {
@@ -30,6 +32,7 @@ const cellsBaseDir  = path.join(rootDir, 'data', 'nautical', 'cells');
 const processedDir  = path.join(rootDir, 'data', 'nautical', 'processed');
 const intermediateDir = path.join(rootDir, 'data', 'nautical', 'intermediate');
 const catalogPath   = path.join(rootDir, 'data', 'nautical', 'catalog.json');
+const releaseConfig = loadReleaseConfig(rootDir);
 
 const cells = discoverCells(rootDir);
 const now   = new Date();
@@ -56,18 +59,17 @@ const failCells = manifests.filter(m => m.validationStatus !== 'PASS');
 
 // ── catalog.json ─────────────────────────────────────────────────────────────
 const catalog = {
-  catalogVersion:  1,
+  catalogVersion:  2,
   builtAt,
   totalCells:      manifests.length,
   passCells:       passCells.length,
   failCells:       failCells.length,
-  depthDatum:      'Approximate LAT',
-  depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
+  datumMode:       'per-cell',
   napIdentityStatus: 'UNVERIFIED',
   disclaimers: [
     'Charted depths are not real-time water depth',
     'Not for navigation',
-    'Depths reference Approximate LAT — not chart datum at your location',
+    'Datum codes and verified labels are preserved per source cell',
   ],
   cells: passCells.map(m => ({
     cellId:                m.cellId,
@@ -79,10 +81,16 @@ const catalog = {
     issueDate:             m.issueDate,
     updateApplicationDate: m.updateApplicationDate,
     producer:              m.producer,
+    sourceSet:             m.sourceSet || sourceSetForCell(releaseConfig, m.cellId),
+    hdat:                  m.hdat,
     vdat:                  m.vdat,
     sdat:                  m.sdat,
+    updateNumber:          m.updateNumber,
     depthDatum:            m.depthDatum,
     depthDatumStatus:      m.depthDatumStatus,
+    verticalDatum:         m.verticalDatum,
+    verticalDatumStatus:   m.verticalDatumStatus,
+    napIdentityStatus:     m.napIdentityStatus,
     bbox:                  m.bbox,
     featureCounts:         m.featureCounts,
     files: {
@@ -158,6 +166,8 @@ const internalManifest = {
     vdat:                  m.vdat,
     sdat:                  m.sdat,
     validationStatus:      m.validationStatus,
+    sourceSet:             m.sourceSet || sourceSetForCell(releaseConfig, m.cellId),
+    datumProfile:          datumProfileFromManifest(m),
   })),
   featureCounts: {
     combinedByOutput: {
@@ -167,14 +177,7 @@ const internalManifest = {
       'soundings.geojson':        { features: sndCount },
     },
   },
-  datumLabels: {
-    depthDatum:       'Approximate LAT',
-    depthDatumCode:   42,
-    depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
-    verticalDatum:    'Local Datum',
-    verticalDatumCode: 24,
-    napIdentityStatus: 'UNVERIFIED',
-  },
+  datumMode: 'per-cell',
   statedLimitations: [
     'VDAT=24 NAP identity is UNVERIFIED',
     'Data is not real-time water depth',
@@ -198,9 +201,17 @@ const publicManifest = {
     issueDate:             m.issueDate,
     updateApplicationDate: m.updateApplicationDate,
     producer:              'Rijkswaterstaat',
+    sourceSet:             m.sourceSet || sourceSetForCell(releaseConfig, m.cellId),
+    hdat:                  m.hdat,
+    sdat:                  m.sdat,
+    vdat:                  m.vdat,
+    depthDatum:            m.depthDatum,
+    depthDatumStatus:      m.depthDatumStatus,
+    verticalDatum:         m.verticalDatum,
+    verticalDatumStatus:   m.verticalDatumStatus,
+    napIdentityStatus:     m.napIdentityStatus,
   })),
-  depthDatum:       'Approximate LAT',
-  depthDatumStatus: 'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
+  datumMode: 'per-cell',
   disclaimers: [
     'Charted depths are not real-time water depth',
     'Not for navigation',

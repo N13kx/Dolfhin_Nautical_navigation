@@ -25,6 +25,8 @@ const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { discoverCells, PIPELINE_SCHEMA_VERSION } = require('./discover-cells.cjs');
+const { resolveDatumProfile } = require('./datum-profile.cjs');
+const { loadReleaseConfig, sourceSetForCell } = require('./release-config.cjs');
 
 // ── Geometry helpers (unchanged from Task #7) ─────────────────────────────────
 
@@ -116,7 +118,7 @@ const EXPECTED_GEOM_TYPES = {
 };
 const OUTPUT_FILE_NAMES = Object.keys(EXPECTED_GEOM_TYPES);
 
-function validateCellUniversal(cellId, cellDir) {
+function validateCellUniversal(cellId, cellDir, expectedDatumProfile) {
   const errors = [];
   let checksPassedCount = 0;
   const ok   = msg => { checksPassedCount++; };
@@ -236,10 +238,17 @@ function validateCellUniversal(cellId, cellDir) {
   else fail(`soundings: S-57 sign inversion — ${signZero_notAt} features have Z=0 but relation!="at"`);
 
   // ── (h) depthDatum on depth-areas + depth-contours ───────────────────────
-  for (const [fname, fc] of [['depth-areas.geojson', depFc], ['depth-contours.geojson', cntFc]]) {
-    const missing = (fc.features || []).filter(f => !(f.properties || {}).depthDatum).length;
-    if (missing === 0) ok(`${fname}: depthDatum present on all features`);
-    else fail(`${fname}: depthDatum missing on ${missing} features`);
+  for (const [fname, fc] of [
+    ['depth-areas.geojson', depFc],
+    ['depth-contours.geojson', cntFc],
+    ['soundings.geojson', sndFc],
+  ]) {
+    const mismatches = (fc.features || []).filter(feature => {
+      const props = feature.properties || {};
+      return Object.entries(expectedDatumProfile).some(([key, value]) => props[key] !== value);
+    }).length;
+    if (mismatches === 0) ok(`${fname}: exact per-cell datum profile preserved`);
+    else fail(`${fname}: per-cell datum profile mismatch on ${mismatches} features`);
   }
 
   // ── (i) napIdentityStatus UNVERIFIED on all depth features ───────────────
@@ -389,6 +398,7 @@ if (!rootDir) {
 const cellsBaseDir  = path.join(rootDir, 'data', 'nautical', 'cells');
 const fixturesPath  = path.join(rootDir, 'test', 'nautical', 'pilot-fixtures.json');
 const intermediateDir = path.join(rootDir, 'data', 'nautical', 'intermediate');
+const releaseConfig = loadReleaseConfig(rootDir);
 
 let pilotFixtures = {};
 if (fs.existsSync(fixturesPath)) {
@@ -425,7 +435,13 @@ for (const cell of cells) {
   const ok   = msg => { okMsgs.push(msg);  process.stdout.write(`    OK  ${msg}\n`); };
   const fail = msg => { errors.push(msg);  process.stderr.write(`    FAIL ${msg}\n`); };
 
-  const result = validateCellUniversal(cell.cellId, cellDir);
+  let meta = {};
+  const metaPath = path.join(intermediateDir, cell.cellId, 'metadata.json');
+  if (fs.existsSync(metaPath)) {
+    try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
+  }
+  const datumProfile = resolveDatumProfile(meta);
+  const result = validateCellUniversal(cell.cellId, cellDir, datumProfile);
   // Relay ok counts
   result.errors.forEach(e => fail(e));
 
@@ -451,12 +467,6 @@ for (const cell of cells) {
   if (cellStatus === 'FAIL') overallPass = false;
 
   // Load metadata for manifest
-  let meta = {};
-  const metaPath = path.join(intermediateDir, cell.cellId, 'metadata.json');
-  if (fs.existsSync(metaPath)) {
-    try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
-  }
-
   // Write cell-manifest.json
   const manifest = {
     cellId:                 cell.cellId,
@@ -470,11 +480,12 @@ for (const cell of cells) {
     issueDate:              meta.DSID_ISDT || null,
     updateApplicationDate:  meta.DSID_UADT || null,
     producer:               meta.DSID_AGEN || null,
+    hdat:                   meta.DSPM_HDAT || null,
     vdat:                   meta.DSPM_VDAT || null,
     sdat:                   meta.DSPM_SDAT || null,
-    depthDatum:             'Approximate LAT',
-    depthDatumStatus:       'VERIFIED_FROM_OFFICIAL_DOCUMENTATION',
-    napIdentityStatus:      'UNVERIFIED',
+    updateNumber:           meta.DSID_UPDN ?? null,
+    sourceSet:              sourceSetForCell(releaseConfig, cell.cellId),
+    ...datumProfile,
     bbox:                   result.bbox || null,
     featureCounts:          result.featureCounts || {},
     validationErrors:       errors,

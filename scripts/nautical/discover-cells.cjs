@@ -32,7 +32,7 @@ const crypto = require('crypto');
 
 const CLASSES      = ['BCNSPP', 'BOYLAT', 'BOYSPP', 'LIGHTS', 'TOPMAR', 'DEPARE', 'DEPCNT', 'SOUNDG'];
 const OUTPUT_FILES = ['navigation-marks.geojson', 'depth-areas.geojson', 'depth-contours.geojson', 'soundings.geojson'];
-const PIPELINE_SCHEMA_VERSION = 1;
+const PIPELINE_SCHEMA_VERSION = 2;
 
 function sha256File(filePath) {
   const data = fs.readFileSync(filePath);

@@ -1,0 +1,42 @@
+{
+  "releaseId": "DOL-020e-family-alpha",
+  "expectedTotalCells": 75,
+  "sourceSets": {
+    "zeeland-validated-61": {
+      "sourceKind": "official",
+      "cellCount": 61,
+      "datumPolicy": "per-cell-metadata",
+      "cells": [
+        "1R7587XI", "1R75883I", "1R75889I", "1R7588FI", "1R7588LI", "1R7588RI", "1R7588XI", "1R75893I", "1R75899I",
+        "1R75K7RI", "1R75K7XI", "1R75K83I", "1R75K89I", "1R75K8FI", "1R75K8LI", "1R75K8RI", "1R75K8XI", "1R75K93I", "1R75K99I",
+        "1R75W7RI", "1R75W7XI", "1R75W83I", "1R75W89I", "1R75W8FI", "1R75W8LI", "1R75W8RI", "1R75W8XI", "1R75W93I", "1R75W99I",
+        "1R76879I", "1R7687FI", "1R7687LI", "1R7687RI", "1R7687XI", "1R7688FI", "1R7688LI", "1R7688RI", "1R7688XI", "1R76893I", "1R76899I", "1R768ZBI",
+        "1R76K7RI", "1R76K7XI", "1R76K83I", "1R76K89I", "1R76K8FI", "1R76K8LI", "1R76K8RI", "1R76K8XI", "1R76K93I", "1R76K99I",
+        "1R76W7RI", "1R76W7XI", "1R76W83I", "1R76W89I", "1R76W8FI", "1R76W8LI", "1R76W8RI", "1R76W8XI", "1R7788RI", "1R7788XI"
+      ]
+    },
+    "inland-mandatory-14": {
+      "sourceKind": "official",
+      "cellCount": 14,
+      "datumPolicy": "per-cell-metadata",
+      "cells": [
+        "1R7HV002", "1R7SP997", "1R7HV001", "1R7HD002", "1R7HD001",
+        "1R7OM991", "1R7OM977", "1R7NO977", "1R7DK980", "1R7NI963",
+        "1R7BE967", "1R7AM252", "1R7WK003", "1R7LE976"
+      ],
+      "auditedMetadata": {
+        "identityStatus": "VERIFIED",
+        "agen": 7979,
+        "hdat": 2,
+        "sdat": 33,
+        "vdat": 33,
+        "updateNumber": 0,
+        "sdatLabel": null,
+        "vdatLabel": null,
+        "napIdentityStatus": "UNVERIFIED",
+        "soundgCount": 0,
+        "depcntCount": 0
+      }
+    }
+  }
+}
