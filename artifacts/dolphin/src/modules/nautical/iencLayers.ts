@@ -203,12 +203,12 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     // TOPMAR excluded (deferred; see header comment).
     //
     // Radius is type-aware:
-    //   buoy-lateral / buoy-special: zoom 8→6 | zoom 12→10 | zoom 16→14 px
-    //   beacon-special:              zoom 8→3 | zoom 12→ 5 | zoom 16→ 7 px
-    //   light:                       zoom 8→4 | zoom 12→ 7 | zoom 16→10 px
+    //   buoy-lateral / buoy-special: zoom 5→4 | zoom 6→5 | zoom 8→7 | zoom 12→10.75 | zoom 16→14 px
+    //   beacon-special:              zoom 8→4 | zoom 12→ 6 | zoom 16→ 8 px
+    //   light:                       zoom 8→5 | zoom 12→ 8 | zoom 16→11 px
     //
     // Colour assignment:
-    //   buoy-lateral: CATLAM 2=red(#cc3333), 3=green(#339944), 4=violet(#9933aa), other=amber(#e07820)
+    //   buoy-lateral: CATLAM 2=red(#f04444), 3=green(#32c85a), 4=violet(#9933aa), other=amber(#e07820)
     //   buoy-special: yellow #e8e040 (all 5 features have COLOUR=["6"])
     //   beacon-special: dark slate #445566 (both features have COLOUR=["2"])
     //   light: COLOUR[0] "1"=cream/#f4f4e8, "3"=red/#ee4444, "4"=green/#44cc44, "6"=yellow/#ffdd44, other=teal/#44cccc
@@ -223,16 +223,18 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: IENC_LAYER_IDS.navMarksPoint,
         type: 'circle' as const,
         source: 'ienc-nav-marks-source',
-        minzoom: 8,
+        minzoom: 5,
         // Exclude TOPMARs — deferred rendering; see header comment.
         filter: ['!=', ['get', 'dolphinKind'], 'topmark'],
         paint: {
           // Type-aware radius: buoys are larger (pillar ring), beacons smaller (stake dot).
           'circle-radius': [
             'interpolate', ['linear'], ['zoom'],
-            8,  ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'],  6, 'beacon-special', 3, 4],
-            12, ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'], 10, 'beacon-special', 5, 7],
-            16, ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'], 14, 'beacon-special', 7, 10],
+            5,  ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'],  4, 'beacon-special', 3, 4],
+            6,  ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'],  5, 'beacon-special', 4, 5],
+            8,  ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'],  7, 'beacon-special', 4, 5],
+            12, ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'], 10.75, 'beacon-special', 6, 8],
+            16, ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'], 14, 'beacon-special', 8, 11],
           ],
           'circle-color': [
             'case',
@@ -244,8 +246,8 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
               // CATLAM is a numeric S-57 attribute stored in sourceProperties.
               // Convert to string for match expression compatibility.
               ['to-string', ['coalesce', ['get', 'CATLAM'], ['get', 'CATLAM', ['get', 'sourceProperties']]]],
-              '2', '#cc3333',  // port-hand
-              '3', '#339944',  // starboard-hand
+              '2', '#f04444',  // port-hand
+              '3', '#32c85a',  // starboard-hand
               '4', '#9933aa',  // preferred-channel
               '#e07820',       // unknown / absent CATLAM
             ],
@@ -282,8 +284,8 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
             '#aaaaaa',
           ],
           'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 1.5,
-          'circle-opacity': 0.9,
+          'circle-stroke-width': 1.9,
+          'circle-opacity': 0.97,
         },
       },
       groupId: 'nav-marks',
@@ -306,18 +308,20 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: IENC_LAYER_IDS.navMarksInner,
         type: 'circle' as const,
         source: 'ienc-nav-marks-source',
-        minzoom: 8,
+        minzoom: 5,
         filter: ['match', ['get', 'dolphinKind'], ['buoy-lateral', 'buoy-special'], true, false],
         paint: {
-          // Inner dot: ~35–40% of the outer radius at each zoom stop.
+          // Inner dot remains proportional to the enlarged outer buoy ring.
           'circle-radius': [
             'interpolate', ['linear'], ['zoom'],
-            8,  2.0,
-            12, 3.5,
-            16, 5.0,
+            5,  1.5,
+            6,  2.0,
+            8,  2.75,
+            12, 4.25,
+            16, 5.5,
           ],
           'circle-color': '#ffffff',
-          'circle-opacity': 0.88,
+          'circle-opacity': 0.96,
           'circle-stroke-width': 0,
         },
       },
@@ -407,7 +411,11 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
             ['coalesce', ['get', 'OBJNAM'], ['get', 'OBJNAM', ['get', 'sourceProperties']]],
             '',
           ],
-          'text-size': 10,
+          'text-size': [
+            'interpolate', ['linear'], ['zoom'],
+            11, 10,
+            16, 11,
+          ],
           'text-anchor': 'top' as const,
           'text-offset': [0, 0.9],
           'text-allow-overlap': false,
@@ -416,7 +424,7 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
         paint: {
           'text-color': '#e8f4ff',
           'text-halo-color': '#0a1020',
-          'text-halo-width': 1.2,
+          'text-halo-width': 1.5,
         },
       },
       groupId: 'nav-marks',
@@ -693,11 +701,20 @@ export function getIencOverlaySpecs(baseUrl: string): OverlaySpec[] {
     },
   ];
 
-  if (IENC_RUNTIME_SOURCE === 'catalog') return specs;
+  // MapLibre paints later layers above earlier layers. Keep chart-depth detail
+  // below official navigation marks while preserving the relative order within
+  // each group (halo → point → inner/stake → restrained name label).
+  const orderedSpecs = [
+    ...specs.filter((spec) => spec.groupId === 'charted-depths'),
+    ...specs.filter((spec) => spec.groupId !== 'charted-depths' && spec.groupId !== 'nav-marks'),
+    ...specs.filter((spec) => spec.groupId === 'nav-marks'),
+  ];
+
+  if (IENC_RUNTIME_SOURCE === 'catalog') return orderedSpecs;
 
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
-  return specs.map((spec) => {
+  return orderedSpecs.map((spec) => {
     const sourceLayer = SOURCE_LAYER_BY_GEOJSON_SOURCE[spec.sourceId];
     if (!sourceLayer) return spec;
     return {
