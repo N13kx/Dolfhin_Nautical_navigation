@@ -74,6 +74,8 @@ jobs:
 
       - name: Build PMTiles with existing LOD rules
         shell: bash
+        env:
+          EXPECTED_IENC_CELLS: '75'
         run: |
           set -euo pipefail
           apt-get update
@@ -83,6 +85,15 @@ jobs:
           install /tmp/tippecanoe/tippecanoe /usr/local/bin/tippecanoe
           bash scripts/nautical/build-pmtiles.sh .
           node scripts/nautical/validate-dol020e-release.cjs .
+
+      - name: Run Dolphin TypeScript and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/dolphin exec tsc --noEmit
+          pnpm --filter @workspace/dolphin build
 
       - name: Ensure raw inland sources cannot enter artifact
         shell: bash

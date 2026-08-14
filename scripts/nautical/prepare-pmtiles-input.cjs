@@ -25,13 +25,17 @@ if (!inputRoot || !outputRoot) {
 }
 
 const catalogPath = path.join(inputRoot, 'catalog.json');
+const expectedStrictCells = Number(process.env.EXPECTED_IENC_CELLS || 61);
+if (!Number.isInteger(expectedStrictCells) || expectedStrictCells < 1) {
+  fail(`EXPECTED_IENC_CELLS must be a positive integer, got ${JSON.stringify(process.env.EXPECTED_IENC_CELLS)}`);
+}
 if (!fs.existsSync(catalogPath)) fail(`Missing catalog: ${catalogPath}`);
 const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
 if (catalog.failCells !== 0 || catalog.passCells !== catalog.totalCells) {
   fail(`Catalog is not all-PASS (${catalog.passCells}/${catalog.totalCells}, fail=${catalog.failCells})`);
 }
-if (mode !== 'allow-partial' && (catalog.totalCells !== 61 || catalog.passCells !== 61)) {
-  fail(`Strict Zeeland build requires 61/61 PASS cells, got ${catalog.passCells}/${catalog.totalCells}`);
+if (mode !== 'allow-partial' && (catalog.totalCells !== expectedStrictCells || catalog.passCells !== expectedStrictCells)) {
+  fail(`Strict build requires ${expectedStrictCells}/${expectedStrictCells} PASS cells, got ${catalog.passCells}/${catalog.totalCells}`);
 }
 
 fs.mkdirSync(outputRoot, { recursive: true });
