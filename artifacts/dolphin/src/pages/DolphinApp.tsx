@@ -37,11 +37,13 @@ function isValidSpeed(s: number | null): s is number {
  *   nav-marks          ON  — IENC navigation marks (Dolphin + Hybrid)
  *   charted-depths     ON  — IENC depth areas, contours, soundings (Dolphin + Hybrid)
  *   community-seamarks OFF — OpenSeaMap raster (Hybrid only, user opt-in)
+ *   rws-bottom-elevation-experiment ON when its build-time feature flag is enabled
  */
 const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
   'nav-marks': true,
   'charted-depths': true,
   'community-seamarks': false,
+  'rws-bottom-elevation-experiment': true,
 };
 
 export function DolphinApp() {

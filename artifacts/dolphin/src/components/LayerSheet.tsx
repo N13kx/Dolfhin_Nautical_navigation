@@ -1,5 +1,9 @@
 import type { MapMode } from './MapView';
-import { Map, Image, Layers, Navigation, Waves, Radio } from 'lucide-react';
+import { Map, Image, Layers, Navigation, Waves, Radio, ScanLine } from 'lucide-react';
+import {
+  RWS_BATHYMETRY_EXPERIMENT_ENABLED,
+  RWS_BATHYMETRY_GROUP_ID,
+} from '../modules/bathymetry/rwsBathymetry';
 
 interface LayerSheetProps {
   isOpen: boolean;
@@ -16,6 +20,13 @@ interface LayerSheetProps {
  * Groups shown per mode.
  * Satellite has no IENC layers, so no toggles are shown.
  */
+const RWS_BATHYMETRY_GROUP = {
+  groupId: RWS_BATHYMETRY_GROUP_ID,
+  label: 'RWS bodemhoogte (experiment)',
+  description: 'Gemeten hoogte t.o.v. NAP · niet voor navigatie',
+  icon: <ScanLine size={18} />,
+};
+
 const MODE_GROUPS: Record<MapMode, Array<{ groupId: string; label: string; description: string; icon: React.ReactNode }>> = {
   Dolphin: [
     {
@@ -30,6 +41,7 @@ const MODE_GROUPS: Record<MapMode, Array<{ groupId: string; label: string; descr
       description: 'Dieptegebieden, -lijnen en peilingen',
       icon: <Waves size={18} />,
     },
+    ...(RWS_BATHYMETRY_EXPERIMENT_ENABLED ? [RWS_BATHYMETRY_GROUP] : []),
   ],
   Satellite: [],
   Hybrid: [
@@ -51,6 +63,7 @@ const MODE_GROUPS: Record<MapMode, Array<{ groupId: string; label: string; descr
       description: 'OpenSeaMap (community-data)',
       icon: <Radio size={18} />,
     },
+    ...(RWS_BATHYMETRY_EXPERIMENT_ENABLED ? [RWS_BATHYMETRY_GROUP] : []),
   ],
 };
 

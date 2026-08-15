@@ -1,6 +1,7 @@
 import type { Map, SourceSpecification, LayerSpecification } from 'maplibre-gl';
 import type { MapMode } from './types';
 import { getIencOverlaySpecs, IENC_LAYER_IDS } from '../nautical/iencLayers';
+import { getRwsBathymetryOverlaySpecs } from '../bathymetry/rwsBathymetry';
 
 export interface OverlaySpec {
   sourceId: string;
@@ -13,9 +14,10 @@ export interface OverlaySpec {
    * visibility according to the provided group → boolean map.
    *
    * Group IDs used in Dolphin:
-   *   "nav-marks"          — official IENC navigation marks
-   *   "charted-depths"     — IENC depth areas, contours, soundings
-   *   "community-seamarks" — OpenSeaMap raster overlay
+   *   "nav-marks"                       — official IENC navigation marks
+   *   "charted-depths"                  — IENC depth areas, contours, soundings
+   *   "community-seamarks"              — OpenSeaMap raster overlay
+   *   "rws-bottom-elevation-experiment" — measured RWS bottom elevation
    */
   groupId?: string;
 }
@@ -41,6 +43,7 @@ const DEMO_ROUTE_GEOJSON = {
 
 // Initialise IENC overlay specs once — BASE_URL is a static string replaced by Vite at build time.
 const IENC_SPECS: OverlaySpec[] = getIencOverlaySpecs(import.meta.env.BASE_URL);
+const RWS_BATHYMETRY_SPECS: OverlaySpec[] = getRwsBathymetryOverlaySpecs(import.meta.env.BASE_URL);
 
 const DEMO_ROUTE_SPEC: OverlaySpec = {
   sourceId: 'demo-route',
@@ -79,6 +82,7 @@ const OPENSEAMAP_SPEC: OverlaySpec = {
 /** Overlays shown in Dolphin nav mode: demo route + official IENC data */
 const DOLPHIN_OVERLAYS: OverlaySpec[] = [
   DEMO_ROUTE_SPEC,
+  ...RWS_BATHYMETRY_SPECS,
   ...IENC_SPECS,
 ];
 
@@ -92,6 +96,7 @@ const DOLPHIN_OVERLAYS: OverlaySpec[] = [
 const HYBRID_OVERLAYS: OverlaySpec[] = [
   OPENSEAMAP_SPEC,
   DEMO_ROUTE_SPEC,
+  ...RWS_BATHYMETRY_SPECS,
   ...IENC_SPECS,
 ];
 

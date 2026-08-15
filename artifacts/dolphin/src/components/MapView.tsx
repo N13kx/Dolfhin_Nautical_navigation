@@ -14,6 +14,7 @@ import {
 import { IENC_CLICKABLE_LAYER_IDS, IENC_RUNTIME_SOURCE } from '../modules/nautical/iencLayers';
 import { IencViewportController } from '../modules/nautical/catalogLoader';
 import { ensurePmtilesProtocol } from '../modules/nautical/pmtilesProtocol';
+import { RWS_BATHYMETRY_EXPERIMENT_ENABLED } from '../modules/bathymetry/rwsBathymetry';
 
 export type { MapMode, MapViewRef };
 
@@ -294,11 +295,24 @@ export const MapView = forwardRef<MapViewRef, MapViewProps>(
     }
 
     return (
-      <div
-        ref={mapContainer}
-        className="w-full h-full absolute inset-0 bg-[#071820]"
-        data-testid="map-container"
-      />
+      <>
+        <div
+          ref={mapContainer}
+          className="w-full h-full absolute inset-0 bg-[#071820]"
+          data-testid="map-container"
+        />
+        {RWS_BATHYMETRY_EXPERIMENT_ENABLED && mode !== 'Satellite' && (
+          <div
+            className="absolute left-3 bottom-24 z-10 max-w-[calc(100vw-1.5rem)] rounded-lg border border-cyan-200/40 bg-[#071820]/90 px-3 py-2 text-[11px] leading-tight text-cyan-50 shadow-lg backdrop-blur-sm pointer-events-none"
+            data-testid="rws-bathymetry-disclaimer"
+          >
+            <span className="font-semibold">Experimentele RWS bodemhoogte</span>
+            <span className="block text-cyan-100/75">
+              meter t.o.v. NAP · geen waterdiepte · niet voor navigatie
+            </span>
+          </div>
+        )}
+      </>
     );
   }
 );

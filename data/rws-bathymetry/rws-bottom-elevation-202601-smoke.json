@@ -1,0 +1,67 @@
+{
+  "task": "DOL-021d",
+  "status": "IMPLEMENTED_NOT_MANUALLY_TESTED",
+  "publisher": "Rijkswaterstaat",
+  "dataset": "Bathymetrie Nederland \u2013 binnenwateren 1 m, January 2026",
+  "sourceCategory": "B_MEASURED_BATHYMETRY",
+  "horizontalCRS": "EPSG:28992",
+  "verticalReference": "NAP / EPSG:5709",
+  "units": "metres relative to NAP",
+  "sourceUrl": "https://geo.rijkswaterstaat.nl/services/ogc/gdr/bodemhoogte_1mtr_historie/wcs",
+  "coverageId": "bodemhoogte_1mtr_historie__bodemhoogte_1mtr_202601",
+  "request": {
+    "service": "WCS",
+    "version": "2.0.1",
+    "format": "image/tiff",
+    "subset": {
+      "x": [
+        80000,
+        80100
+      ],
+      "y": [
+        407000,
+        407100
+      ]
+    }
+  },
+  "sourceBBox": {
+    "crs": "EPSG:28992",
+    "west": 80000,
+    "south": 407000,
+    "east": 80100,
+    "north": 407100
+  },
+  "raster": {
+    "width": 100,
+    "height": 100,
+    "pixelSize": [
+      1,
+      -1
+    ],
+    "dataType": "float32",
+    "noDataValue": 3.3999999521443642e+38,
+    "validPixels": 1159,
+    "noDataPixels": 8841,
+    "minValid": -2.6331939697265625,
+    "maxValid": -2.263636350631714,
+    "negativeValid": 1159,
+    "zeroValid": 0,
+    "positiveValid": 0
+  },
+  "semantics": {
+    "signedValuesPreserved": true,
+    "absoluteValueApplied": false,
+    "signInverted": false,
+    "derived": false,
+    "navigationSuitable": false
+  },
+  "noDataHandling": "source NoData pixels become fully transparent display pixels",
+  "datasetSnapshotDate": "2026-01-01",
+  "measurementDate": null,
+  "measurementDateStatus": "UNKNOWN",
+  "fetchedProcessedAt": "2026-08-15T06:15:47.153792Z",
+  "artifacts": {
+    "sourceGeoTiffSha256": "369413d64fde14245e0a9708f237fcfd0056809e5362c86171428fb24a19123a",
+    "displayPngSha256": "ae17d37cf19b1ac55de47c8f416dbfd041567dd6be13f8fc2f15ad7e36a54bc9"
+  }
+}
