@@ -57,7 +57,7 @@ export function getRwsBathymetryOverlaySpecs(baseUrl: string): OverlaySpec[] {
         id: 'rws-bottom-elevation-smoke-raster',
         type: 'raster',
         source: sourceId,
-        minzoom: 12,
+        minzoom: 9,
         maxzoom: 22,
         paint: {
           'raster-opacity': 0.72,
